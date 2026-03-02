@@ -73,6 +73,15 @@ export interface DistributionRule {
   message_template: string;
 }
 
+export function createDefaultDistributionRule(): DistributionRule {
+  return {
+    filter_query: "{{all}}",
+    note_path_template: "Telegram/{{chat}}/{{topic}}Messages.md",
+    message_template:
+      "- {{messageDate:YYYY-MM-DD HH:mm:ss}} {{user}}\n  - Chat: {{chat}}\n  - Type: {{messageType}}\n\n  {{content}}",
+  };
+}
+
 export interface PluginSettings {
   supabase_url: string;
   supabase_anon_key: string;
@@ -87,12 +96,7 @@ export interface PluginSettings {
   topic_names: TopicNameCacheItem[];
 }
 
-export const DEFAULT_DISTRIBUTION_RULE: DistributionRule = {
-  filter_query: "{{all}}",
-  note_path_template: "Telegram/{{chat}}/{{topic}}Messages.md",
-  message_template:
-    "- {{messageDate:YYYY-MM-DD HH:mm:ss}} {{user}}\n  - Chat: {{chat}}\n  - Type: {{messageType}}\n\n  {{content}}",
-};
+export const DEFAULT_DISTRIBUTION_RULE: DistributionRule = createDefaultDistributionRule();
 
 export const DEFAULT_SETTINGS: PluginSettings = {
   supabase_url: "",
@@ -102,7 +106,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   default_note_folder: "Telegram",
   default_note_path_template: DEFAULT_DISTRIBUTION_RULE.note_path_template,
   default_message_template: DEFAULT_DISTRIBUTION_RULE.message_template,
-  distribution_rules: [DEFAULT_DISTRIBUTION_RULE],
+  distribution_rules: [createDefaultDistributionRule()],
   poll_interval_seconds: 30,
   is_realtime_enabled: false,
   topic_names: [],

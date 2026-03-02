@@ -1,5 +1,6 @@
 import { Notice, PluginSettingTab, Setting } from "obsidian";
 import type ObsidianTelegramPlugin from "./main";
+import { createDefaultDistributionRule } from "./types";
 
 export class ObsidianTelegramSettingTab extends PluginSettingTab {
   plugin: ObsidianTelegramPlugin;
@@ -72,36 +73,91 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
           }),
       );
 
-    new Setting(containerEl)
-      .setName("Note path template")
-      .setDesc("Path template for the default routing rule.")
-      .addText((text) =>
-        text
-          .setPlaceholder("Telegram/{{chat}}/{{topic}}Messages.md")
-          .setValue(this.plugin.settings.default_note_path_template)
-          .onChange(async (value) => {
-            const nextValue = value.trim() || "Telegram/{{chat}}/{{topic}}Messages.md";
-            this.plugin.settings.default_note_path_template = nextValue;
-            this.plugin.settings.distribution_rules[0].note_path_template = nextValue;
-            await this.plugin.saveSettings();
-          }),
-      );
+    containerEl.createEl("h3", { text: "Routing Rules" });
+    containerEl.createEl("p", {
+      text: "Rules are checked top to bottom. Keep a final {{all}} fallback rule.",
+    });
+
+    this.plugin.settings.distribution_rules.forEach((rule, index) => {
+      const isFallbackRule = rule.filter_query.trim() === "{{all}}";
+      const ruleHeader = containerEl.createDiv({ cls: "obsidian-telegram-rule" });
+      ruleHeader.createEl("h4", {
+        text: isFallbackRule ? `Rule ${index + 1} (fallback)` : `Rule ${index + 1}`,
+      });
+
+      new Setting(containerEl)
+        .setName("Filter query")
+        .setDesc("Examples: {{topic=Roadmap}}, {{chat=Ideas}}, {{all}}")
+        .addText((text) =>
+          text
+            .setPlaceholder("{{all}}")
+            .setValue(rule.filter_query)
+            .onChange(async (value) => {
+              this.plugin.settings.distribution_rules[index].filter_query = value.trim() || "{{all}}";
+              this.syncDefaultRule(index);
+              await this.plugin.saveSettings();
+            }),
+        );
+
+      new Setting(containerEl)
+        .setName("Note path template")
+        .setDesc("Path template used when this rule matches.")
+        .addText((text) =>
+          text
+            .setPlaceholder("Telegram/{{chat}}/{{topic}}Messages.md")
+            .setValue(rule.note_path_template)
+            .onChange(async (value) => {
+              this.plugin.settings.distribution_rules[index].note_path_template =
+                value.trim() || createDefaultDistributionRule().note_path_template;
+              this.syncDefaultRule(index);
+              await this.plugin.saveSettings();
+            }),
+        );
+
+      new Setting(containerEl)
+        .setName("Message template")
+        .setDesc("Template used to render the note block for this rule.")
+        .addTextArea((text) =>
+          text
+            .setPlaceholder("- {{messageDate:YYYY-MM-DD HH:mm:ss}} {{user}}")
+            .setValue(rule.message_template)
+            .onChange(async (value) => {
+              this.plugin.settings.distribution_rules[index].message_template =
+                value.trim() || createDefaultDistributionRule().message_template;
+              this.syncDefaultRule(index);
+              await this.plugin.saveSettings();
+            }),
+        )
+        .addButton((button) =>
+          button
+            .setButtonText("Remove")
+            .setWarning()
+            .setDisabled(this.plugin.settings.distribution_rules.length === 1)
+            .onClick(async () => {
+              this.plugin.settings.distribution_rules.splice(index, 1);
+              this.ensureFallbackRule();
+              this.syncDefaultRule(0);
+              await this.plugin.saveSettings();
+              this.display();
+            }),
+        );
+    });
 
     new Setting(containerEl)
-      .setName("Message template")
-      .setDesc("Template used for the default rendered message block.")
-      .addTextArea((text) =>
-        text
-          .setPlaceholder("- {{messageDate:YYYY-MM-DD HH:mm:ss}} {{user}}")
-          .setValue(this.plugin.settings.default_message_template)
-          .onChange(async (value) => {
-            const nextValue =
-              value.trim() ||
-              "- {{messageDate:YYYY-MM-DD HH:mm:ss}} {{user}}\n  - Chat: {{chat}}\n  - Type: {{messageType}}\n\n  {{content}}";
-            this.plugin.settings.default_message_template = nextValue;
-            this.plugin.settings.distribution_rules[0].message_template = nextValue;
-            await this.plugin.saveSettings();
-          }),
+      .setName("Rules")
+      .setDesc("Add a new routing rule above the fallback rule.")
+      .addButton((button) =>
+        button.setButtonText("Add rule").setCta().onClick(async () => {
+          const fallbackIndex = this.plugin.settings.distribution_rules.findIndex(
+            (rule) => rule.filter_query.trim() === "{{all}}",
+          );
+          const insertIndex =
+            fallbackIndex === -1 ? this.plugin.settings.distribution_rules.length : fallbackIndex;
+          this.plugin.settings.distribution_rules.splice(insertIndex, 0, createDefaultDistributionRule());
+          this.plugin.settings.distribution_rules[insertIndex].filter_query = "{{topic=Example}}";
+          await this.plugin.saveSettings();
+          this.display();
+        }),
       );
 
     containerEl.createEl("h3", { text: "Authentication" });
@@ -226,5 +282,25 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
       .setName("Client ID")
       .setDesc("Stable identifier for this plugin installation.")
       .addText((text) => text.setValue(this.plugin.settings.client_id).setDisabled(true));
+  }
+
+  private syncDefaultRule(index: number): void {
+    if (index !== 0) {
+      return;
+    }
+
+    const rule = this.plugin.settings.distribution_rules[0];
+    this.plugin.settings.default_note_path_template = rule.note_path_template;
+    this.plugin.settings.default_message_template = rule.message_template;
+  }
+
+  private ensureFallbackRule(): void {
+    const hasFallback = this.plugin.settings.distribution_rules.some(
+      (rule) => rule.filter_query.trim() === "{{all}}",
+    );
+
+    if (!hasFallback) {
+      this.plugin.settings.distribution_rules.push(createDefaultDistributionRule());
+    }
   }
 }

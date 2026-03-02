@@ -1,5 +1,9 @@
 import { Notice, Plugin } from "obsidian";
-import { DEFAULT_SETTINGS, type PluginSettings } from "./types";
+import {
+  createDefaultDistributionRule,
+  DEFAULT_SETTINGS,
+  type PluginSettings,
+} from "./types";
 import { ObsidianTelegramSettingTab } from "./settings-tab";
 import { StatusIndicator } from "./status-indicator";
 import {
@@ -74,10 +78,24 @@ export default class ObsidianTelegramPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const loaded = await this.loadData();
+    this.settings = {
+      ...DEFAULT_SETTINGS,
+      ...loaded,
+      distribution_rules: this.normalizeDistributionRules(loaded?.distribution_rules),
+    };
+
+    if (!this.settings.default_note_path_template) {
+      this.settings.default_note_path_template = this.settings.distribution_rules[0].note_path_template;
+    }
+
+    if (!this.settings.default_message_template) {
+      this.settings.default_message_template = this.settings.distribution_rules[0].message_template;
+    }
   }
 
   async saveSettings(): Promise<void> {
+    this.settings.distribution_rules = this.normalizeDistributionRules(this.settings.distribution_rules);
     await this.saveData(this.settings);
   }
 
@@ -248,5 +266,30 @@ export default class ObsidianTelegramPlugin extends Plugin {
       getBlockEndMarker(),
       blockContent,
     );
+  }
+
+  private normalizeDistributionRules(rules: unknown): PluginSettings["distribution_rules"] {
+    if (!Array.isArray(rules) || rules.length === 0) {
+      return [createDefaultDistributionRule()];
+    }
+
+    const normalized = rules
+      .map((rule) => {
+        if (!rule || typeof rule !== "object") {
+          return null;
+        }
+
+        const candidate = rule as Partial<PluginSettings["distribution_rules"][number]>;
+        return {
+          filter_query: candidate.filter_query?.trim() || "{{all}}",
+          note_path_template:
+            candidate.note_path_template?.trim() || createDefaultDistributionRule().note_path_template,
+          message_template:
+            candidate.message_template?.trim() || createDefaultDistributionRule().message_template,
+        };
+      })
+      .filter((rule): rule is PluginSettings["distribution_rules"][number] => rule !== null);
+
+    return normalized.length > 0 ? normalized : [createDefaultDistributionRule()];
   }
 }
