@@ -1,4 +1,4 @@
-import { PluginSettingTab, Setting } from "obsidian";
+import { Notice, PluginSettingTab, Setting } from "obsidian";
 import type ObsidianTelegramPlugin from "./main";
 
 export class ObsidianTelegramSettingTab extends PluginSettingTab {
@@ -12,6 +12,8 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
+    let emailValue = this.plugin.settings.email;
+    let passwordValue = "";
 
     containerEl.createEl("h2", { text: "Obsidian Telegram" });
 
@@ -42,6 +44,85 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("Connection")
+      .setDesc("Reconnect the plugin after changing Supabase settings.")
+      .addButton((button) =>
+        button.setButtonText("Reconnect").onClick(async () => {
+          try {
+            await this.plugin.reinitializeSupabase();
+            new Notice("Supabase client reinitialized.");
+            this.display();
+          } catch (error) {
+            new Notice(error instanceof Error ? error.message : String(error));
+          }
+        }),
+      );
+
+    containerEl.createEl("h3", { text: "Authentication" });
+
+    new Setting(containerEl)
+      .setName("Email")
+      .setDesc("Supabase account email for this plugin.")
+      .addText((text) =>
+        text
+          .setPlaceholder("you@example.com")
+          .setValue(emailValue)
+          .onChange((value) => {
+            emailValue = value.trim();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Password")
+      .setDesc("Used only for sign-in. The plugin relies on the Supabase session after that.")
+      .addText((text) => {
+        text.inputEl.type = "password";
+        text.setPlaceholder("Password").onChange((value) => {
+          passwordValue = value;
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Session")
+      .setDesc(
+        this.plugin.hasSession()
+          ? `Signed in as ${this.plugin.getSessionEmail() || this.plugin.settings.email}`
+          : "No active Supabase session.",
+      )
+      .addButton((button) =>
+        button.setButtonText("Sign in").setCta().onClick(async () => {
+          try {
+            await this.plugin.authenticate(emailValue, passwordValue);
+            new Notice("Signed in to Supabase.");
+            this.display();
+          } catch (error) {
+            new Notice(error instanceof Error ? error.message : String(error));
+          }
+        }),
+      )
+      .addButton((button) =>
+        button.setButtonText("Sign out").onClick(async () => {
+          try {
+            await this.plugin.logout();
+            new Notice("Signed out.");
+            this.display();
+          } catch (error) {
+            new Notice(error instanceof Error ? error.message : String(error));
+          }
+        }),
+      )
+      .addButton((button) =>
+        button.setButtonText("Sync now").onClick(async () => {
+          try {
+            await this.plugin.manualSync();
+            new Notice("Sync completed.");
+          } catch (error) {
+            new Notice(error instanceof Error ? error.message : String(error));
+          }
+        }),
+      );
+
+    new Setting(containerEl)
       .setName("Poll interval")
       .setDesc("How often the plugin checks for new messages.")
       .addText((text) =>
@@ -50,6 +131,9 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
           if (Number.isFinite(parsed) && parsed > 0) {
             this.plugin.settings.poll_interval_seconds = parsed;
             await this.plugin.saveSettings();
+            if (this.plugin.hasSession()) {
+              await this.plugin.reinitializeSupabase();
+            }
           }
         }),
       );
@@ -61,6 +145,9 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
         toggle.setValue(this.plugin.settings.is_realtime_enabled).onChange(async (value) => {
           this.plugin.settings.is_realtime_enabled = value;
           await this.plugin.saveSettings();
+          if (this.plugin.hasSession()) {
+            await this.plugin.reinitializeSupabase();
+          }
         }),
       );
 

@@ -17,6 +17,10 @@ export class StatusIndicator {
     this.el.setText("Telegram: connected");
   }
 
+  setDisconnected(): void {
+    this.el.setText("Telegram: disconnected");
+  }
+
   setSyncing(): void {
     this.el.setText("Telegram: syncing");
   }
