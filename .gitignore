@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.DS_Store
+.env
+.env.*
+plugin/main.js
+plugin/node_modules/
+plugin/coverage/
+supabase/.temp/
