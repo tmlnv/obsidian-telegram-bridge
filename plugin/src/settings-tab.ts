@@ -58,6 +58,19 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
         }),
       );
 
+    new Setting(containerEl)
+      .setName("Default note folder")
+      .setDesc("Base folder used when writing synced Telegram messages.")
+      .addText((text) =>
+        text
+          .setPlaceholder("Telegram")
+          .setValue(this.plugin.settings.default_note_folder)
+          .onChange(async (value) => {
+            this.plugin.settings.default_note_folder = value.trim() || "Telegram";
+            await this.plugin.saveSettings();
+          }),
+      );
+
     containerEl.createEl("h3", { text: "Authentication" });
 
     new Setting(containerEl)

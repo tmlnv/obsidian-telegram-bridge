@@ -11,6 +11,9 @@ import {
   signOut,
 } from "./supabase-client";
 import { SyncEngine } from "./sync-engine";
+import { buildDefaultNotePath, buildMessageMarker, getBlockEndMarker, renderMessageBlock } from "./message-renderer";
+import { upsertMessageBlock } from "./vault-writer";
+import type { MessageRow } from "./types";
 
 function createClientId(): string {
   if (globalThis.crypto?.randomUUID) {
@@ -169,8 +172,7 @@ export default class ObsidianTelegramPlugin extends Plugin {
       pollIntervalSeconds: this.settings.poll_interval_seconds,
       isRealtimeEnabled: this.settings.is_realtime_enabled,
       onMessages: async (messages) => {
-        this.statusIndicator?.setSyncing();
-        console.log("Fetched Telegram messages:", messages.length);
+        await this.processMessages(messages);
       },
       onError: (error) => {
         this.statusIndicator?.setError(error.message);
@@ -179,5 +181,29 @@ export default class ObsidianTelegramPlugin extends Plugin {
     });
 
     await this.syncEngine.start();
+  }
+
+  private async processMessages(messages: MessageRow[]): Promise<void> {
+    this.statusIndicator?.setSyncing();
+
+    for (const message of messages) {
+      await this.processMessage(message);
+    }
+
+    this.statusIndicator?.setConnected();
+  }
+
+  private async processMessage(message: MessageRow): Promise<void> {
+    const notePath = buildDefaultNotePath(message, this.settings);
+    const marker = buildMessageMarker(message);
+    const blockContent = renderMessageBlock(message);
+
+    await upsertMessageBlock(
+      this.app.vault,
+      notePath,
+      marker,
+      getBlockEndMarker(),
+      blockContent,
+    );
   }
 }
