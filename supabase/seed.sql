@@ -1,0 +1,2 @@
+-- Seed data is intentionally empty for now.
+-- Add local development fixtures here when the schema and plugin flow stabilize.
