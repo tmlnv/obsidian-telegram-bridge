@@ -56,6 +56,7 @@ describe("matchRule", () => {
   const rule: DistributionRule = {
     filter_query: "{{topic=Roadmap}}",
     note_path_template: "Telegram/{{chat}}/{{topic}}Messages.md",
+    file_path_template: "Telegram/files/{{chat}}/{{file:name}}.{{file:extension}}",
     message_template: "{{content}}",
   };
 
@@ -74,11 +75,13 @@ describe("findMatchingRule", () => {
       {
         filter_query: "{{topic=Roadmap}}",
         note_path_template: "Telegram/{{chat}}/{{topic}}Messages.md",
+        file_path_template: "Telegram/files/{{chat}}/{{file:name}}.{{file:extension}}",
         message_template: "{{content}}",
       },
       {
         filter_query: "{{all}}",
         note_path_template: "Telegram/Fallback.md",
+        file_path_template: "Telegram/files/Fallback/{{file:name}}.{{file:extension}}",
         message_template: "{{content}}",
       },
     ];

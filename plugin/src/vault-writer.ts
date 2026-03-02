@@ -63,3 +63,52 @@ export async function upsertMessageBlock(
 
   await vault.modify(existing, appendBlock(currentContent, blockContent));
 }
+
+function splitExtension(filePath: string): { base: string; extension: string } {
+  const normalized = normalizePath(filePath);
+  const dotIndex = normalized.lastIndexOf(".");
+
+  if (dotIndex <= 0) {
+    return {
+      base: normalized,
+      extension: "",
+    };
+  }
+
+  return {
+    base: normalized.slice(0, dotIndex),
+    extension: normalized.slice(dotIndex),
+  };
+}
+
+export async function saveBinaryFile(
+  vault: Vault,
+  filePath: string,
+  data: ArrayBuffer,
+): Promise<string> {
+  const normalizedPath = normalizePath(filePath);
+  await ensureFolderExists(vault, normalizedPath);
+
+  const existing = vault.getAbstractFileByPath(normalizedPath);
+  if (!existing) {
+    await vault.createBinary(normalizedPath, data);
+    return normalizedPath;
+  }
+
+  if (existing instanceof TFile) {
+    await vault.modifyBinary(existing, data);
+    return normalizedPath;
+  }
+
+  const { base, extension } = splitExtension(normalizedPath);
+  let suffix = 1;
+
+  while (true) {
+    const candidate = `${base}-${suffix}${extension}`;
+    if (!vault.getAbstractFileByPath(candidate)) {
+      await vault.createBinary(candidate, data);
+      return candidate;
+    }
+    suffix += 1;
+  }
+}

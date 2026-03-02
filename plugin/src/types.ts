@@ -71,12 +71,14 @@ export interface DistributionRule {
   filter_query: string;
   note_path_template: string;
   message_template: string;
+  file_path_template: string;
 }
 
 export function createDefaultDistributionRule(): DistributionRule {
   return {
     filter_query: "{{all}}",
     note_path_template: "Telegram/{{chat}}/{{topic}}Messages.md",
+    file_path_template: "Telegram/files/{{chat}}/{{file:name}}.{{file:extension}}",
     message_template:
       "- {{messageDate:YYYY-MM-DD HH:mm:ss}} {{user}}\n  - Chat: {{chat}}\n  - Type: {{messageType}}\n\n  {{content}}",
   };
@@ -90,6 +92,7 @@ export interface PluginSettings {
   default_note_folder: string;
   default_note_path_template: string;
   default_message_template: string;
+  default_file_path_template: string;
   distribution_rules: DistributionRule[];
   poll_interval_seconds: number;
   is_realtime_enabled: boolean;
@@ -106,6 +109,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   default_note_folder: "Telegram",
   default_note_path_template: DEFAULT_DISTRIBUTION_RULE.note_path_template,
   default_message_template: DEFAULT_DISTRIBUTION_RULE.message_template,
+  default_file_path_template: DEFAULT_DISTRIBUTION_RULE.file_path_template,
   distribution_rules: [createDefaultDistributionRule()],
   poll_interval_seconds: 30,
   is_realtime_enabled: false,

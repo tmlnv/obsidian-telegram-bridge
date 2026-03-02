@@ -16,7 +16,7 @@ import {
 } from "./supabase-client";
 import { SyncEngine } from "./sync-engine";
 import { buildDefaultNotePath, buildMessageMarker, getBlockEndMarker, renderMessageBlock } from "./message-renderer";
-import { upsertMessageBlock } from "./vault-writer";
+import { saveBinaryFile, upsertMessageBlock } from "./vault-writer";
 import type { MessageRow } from "./types";
 import { findMatchingRule } from "./distribution-rules";
 import { expandTemplate } from "./template-engine";
@@ -91,6 +91,10 @@ export default class ObsidianTelegramPlugin extends Plugin {
 
     if (!this.settings.default_message_template) {
       this.settings.default_message_template = this.settings.distribution_rules[0].message_template;
+    }
+
+    if (!this.settings.default_file_path_template) {
+      this.settings.default_file_path_template = this.settings.distribution_rules[0].file_path_template;
     }
   }
 
@@ -257,7 +261,8 @@ export default class ObsidianTelegramPlugin extends Plugin {
       ? expandTemplate(rule.note_path_template, message, { isPath: true })
       : buildDefaultNotePath(message, this.settings);
     const marker = buildMessageMarker(message);
-    const blockContent = renderMessageBlock(message, rule, this.settings);
+    const attachmentMarkdown = await this.processAttachment(message, rule);
+    const blockContent = renderMessageBlock(message, rule, this.settings, attachmentMarkdown);
 
     await upsertMessageBlock(
       this.app.vault,
@@ -266,6 +271,33 @@ export default class ObsidianTelegramPlugin extends Plugin {
       getBlockEndMarker(),
       blockContent,
     );
+  }
+
+  private async processAttachment(
+    message: MessageRow,
+    rule?: PluginSettings["distribution_rules"][number],
+  ): Promise<string | undefined> {
+    if (!message.file_path || !this.syncEngine) {
+      return undefined;
+    }
+
+    const fileTemplate =
+      rule?.file_path_template ||
+      this.settings.default_file_path_template ||
+      createDefaultDistributionRule().file_path_template;
+    const targetPath = expandTemplate(fileTemplate, message, { isPath: true });
+    const data = await this.syncEngine.downloadFile(message.file_path);
+    const savedPath = await saveBinaryFile(this.app.vault, targetPath, data);
+
+    if (this.isEmbeddableMimeType(message.file_mime_type)) {
+      return `![[${savedPath}]]`;
+    }
+
+    return `[[${savedPath}]]`;
+  }
+
+  private isEmbeddableMimeType(mimeType: string | null): boolean {
+    return Boolean(mimeType && /^(image|audio|video)\//.test(mimeType));
   }
 
   private normalizeDistributionRules(rules: unknown): PluginSettings["distribution_rules"] {
@@ -284,6 +316,8 @@ export default class ObsidianTelegramPlugin extends Plugin {
           filter_query: candidate.filter_query?.trim() || "{{all}}",
           note_path_template:
             candidate.note_path_template?.trim() || createDefaultDistributionRule().note_path_template,
+          file_path_template:
+            candidate.file_path_template?.trim() || createDefaultDistributionRule().file_path_template,
           message_template:
             candidate.message_template?.trim() || createDefaultDistributionRule().message_template,
         };

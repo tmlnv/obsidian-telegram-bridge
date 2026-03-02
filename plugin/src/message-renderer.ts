@@ -24,6 +24,7 @@ export function renderMessageBlock(
   message: MessageRow,
   rule?: DistributionRule,
   settings?: PluginSettings,
+  attachmentMarkdown?: string,
 ): string {
   const marker = buildMessageMarker(message);
   const template =
@@ -31,6 +32,10 @@ export function renderMessageBlock(
     settings?.default_message_template ??
     "- {{messageDate:YYYY-MM-DD HH:mm:ss}} {{user}}\n\n  {{content}}";
   const body = expandTemplate(template, message).trimEnd();
-  const lines = [marker, body, BLOCK_END_MARKER];
+  const lines = [marker, body];
+  if (attachmentMarkdown) {
+    lines.push("", attachmentMarkdown);
+  }
+  lines.push(BLOCK_END_MARKER);
   return `${lines.join("\n")}\n`;
 }

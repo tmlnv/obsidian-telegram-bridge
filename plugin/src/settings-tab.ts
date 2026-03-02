@@ -115,6 +115,21 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
         );
 
       new Setting(containerEl)
+        .setName("File path template")
+        .setDesc("Path template used for synced files when this rule matches.")
+        .addText((text) =>
+          text
+            .setPlaceholder("Telegram/files/{{chat}}/{{file:name}}.{{file:extension}}")
+            .setValue(rule.file_path_template)
+            .onChange(async (value) => {
+              this.plugin.settings.distribution_rules[index].file_path_template =
+                value.trim() || createDefaultDistributionRule().file_path_template;
+              this.syncDefaultRule(index);
+              await this.plugin.saveSettings();
+            }),
+        );
+
+      new Setting(containerEl)
         .setName("Message template")
         .setDesc("Template used to render the note block for this rule.")
         .addTextArea((text) =>
@@ -291,6 +306,7 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
 
     const rule = this.plugin.settings.distribution_rules[0];
     this.plugin.settings.default_note_path_template = rule.note_path_template;
+    this.plugin.settings.default_file_path_template = rule.file_path_template;
     this.plugin.settings.default_message_template = rule.message_template;
   }
 

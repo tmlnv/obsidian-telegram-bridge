@@ -22,6 +22,14 @@ interface ForumTopicPayload {
   name: string;
 }
 
+interface TelegramFileDescriptor {
+  file_id?: string;
+  file_unique_id?: string;
+  file_name?: string;
+  file_size?: number;
+  mime_type?: string;
+}
+
 interface TelegramMessage {
   message_id: number;
   date: number;
@@ -32,6 +40,11 @@ interface TelegramMessage {
   entities?: unknown[];
   caption_entities?: unknown[];
   media_group_id?: string;
+  photo?: TelegramFileDescriptor[];
+  document?: TelegramFileDescriptor;
+  video?: TelegramFileDescriptor;
+  audio?: TelegramFileDescriptor;
+  voice?: TelegramFileDescriptor;
   from?: TelegramUser;
   chat: TelegramChat;
   reply_to_message?: {
@@ -49,6 +62,43 @@ interface TelegramUpdate {
   edited_message?: TelegramMessage;
   channel_post?: TelegramMessage;
   edited_channel_post?: TelegramMessage;
+}
+
+interface BotConnectionRow {
+  user_id: string;
+  webhook_secret: string;
+  bot_token_ciphertext: string | null;
+  bot_token_nonce: string | null;
+}
+
+function decodeBase64(value: string): Uint8Array {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+async function importEncryptionKey(): Promise<CryptoKey> {
+  const rawKey = Deno.env.get("BOT_TOKEN_ENCRYPTION_KEY");
+  if (!rawKey) {
+    throw new Error("Missing BOT_TOKEN_ENCRYPTION_KEY secret.");
+  }
+
+  return await crypto.subtle.importKey(
+    "raw",
+    decodeBase64(rawKey),
+    { name: "AES-GCM" },
+    false,
+    ["decrypt"],
+  );
+}
+
+async function decryptBotToken(ciphertext: string, nonce: string): Promise<string> {
+  const key = await importEncryptionKey();
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: decodeBase64(nonce) },
+    key,
+    decodeBase64(ciphertext),
+  );
+  return new TextDecoder().decode(decrypted);
 }
 
 function toIso(unixSeconds?: number): string | null {
@@ -110,10 +160,7 @@ async function upsertTopic(
   }
 }
 
-async function resolveTopicName(
-  userId: string,
-  message: TelegramMessage,
-): Promise<string | null> {
+async function resolveTopicName(userId: string, message: TelegramMessage): Promise<string | null> {
   const topicId = getTopicId(message);
   if (!topicId) {
     return null;
@@ -145,15 +192,37 @@ async function resolveTopicName(
   return data?.topic_name ?? null;
 }
 
+function getTelegramFile(message: TelegramMessage): TelegramFileDescriptor | null {
+  if (message.photo?.length) {
+    return message.photo[message.photo.length - 1];
+  }
+
+  return message.document ?? message.video ?? message.audio ?? message.voice ?? null;
+}
+
 function isServiceOnlyMessage(message: TelegramMessage): boolean {
-  return !message.text && !message.caption && !message.media_group_id;
+  return !message.text && !message.caption && !getTelegramFile(message) && !message.media_group_id;
 }
 
 function detectMessageType(message: TelegramMessage): string {
+  if (message.photo?.length) {
+    return "photo";
+  }
+  if (message.document) {
+    return "document";
+  }
+  if (message.video) {
+    return "video";
+  }
+  if (message.audio) {
+    return "audio";
+  }
+  if (message.voice) {
+    return "voice";
+  }
   if (message.text) {
     return "text";
   }
-
   if (message.caption) {
     return "caption";
   }
@@ -169,6 +238,87 @@ async function computeContentHash(update: TelegramUpdate): Promise<string> {
     .join("");
 }
 
+async function downloadTelegramFile(
+  botToken: string,
+  fileId: string,
+): Promise<{ data: ArrayBuffer; filePath: string }> {
+  const metadataResponse = await fetch(`https://api.telegram.org/bot${botToken}/getFile`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file_id: fileId }),
+  });
+  const metadata = await metadataResponse.json();
+
+  if (!metadata.ok || !metadata.result?.file_path) {
+    throw new Error(metadata.description ?? "Failed to resolve Telegram file.");
+  }
+
+  const filePath = metadata.result.file_path as string;
+  const fileResponse = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`);
+
+  if (!fileResponse.ok) {
+    throw new Error(`Failed to download Telegram file: ${fileResponse.status}`);
+  }
+
+  return {
+    data: await fileResponse.arrayBuffer(),
+    filePath,
+  };
+}
+
+function resolveFileExtension(file: TelegramFileDescriptor): string {
+  if (file.file_name?.includes(".")) {
+    return `.${file.file_name.split(".").pop()}`;
+  }
+
+  const suffix = file.mime_type?.split("/").pop() ?? "";
+  if (!suffix) {
+    return "";
+  }
+
+  return suffix === "jpeg" ? ".jpg" : `.${suffix}`;
+}
+
+async function uploadTelegramFile(
+  userId: string,
+  message: TelegramMessage,
+  botToken: string,
+): Promise<{
+  file_path: string | null;
+  file_name: string | null;
+  file_size: number | null;
+  file_mime_type: string | null;
+}> {
+  const file = getTelegramFile(message);
+  if (!file?.file_id) {
+    return {
+      file_path: null,
+      file_name: null,
+      file_size: null,
+      file_mime_type: null,
+    };
+  }
+
+  const downloaded = await downloadTelegramFile(botToken, file.file_id);
+  const storagePath = `${userId}/${detectMessageType(message)}s/${message.chat.id}/${message.message_id}_${file.file_unique_id ?? "file"}${resolveFileExtension(file)}`;
+
+  const { error } = await supabaseAdmin.storage.from("telegram-files").upload(storagePath, downloaded.data, {
+    contentType: file.mime_type ?? undefined,
+    upsert: true,
+  });
+
+  if (error) {
+    throw new Error(`Failed to upload Telegram file: ${error.message}`);
+  }
+
+  return {
+    file_path: storagePath,
+    file_name: file.file_name ?? downloaded.filePath.split("/").pop() ?? null,
+    file_size: file.file_size ?? null,
+    file_mime_type: file.mime_type ?? null,
+  };
+}
+
 Deno.serve(async (request: Request) => {
   if (request.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
@@ -179,11 +329,11 @@ Deno.serve(async (request: Request) => {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const { data: botConnection, error } = await supabaseAdmin
+  const { data: botConnection, error } = (await supabaseAdmin
     .from("bot_connections")
-    .select("user_id, webhook_secret")
+    .select("user_id, webhook_secret, bot_token_ciphertext, bot_token_nonce")
     .eq("webhook_secret", secret)
-    .maybeSingle();
+    .maybeSingle()) as { data: BotConnectionRow | null; error: { message: string } | null };
 
   if (error || !botConnection) {
     return new Response("Unauthorized", { status: 401 });
@@ -206,10 +356,19 @@ Deno.serve(async (request: Request) => {
   }
 
   try {
+    if (!botConnection.bot_token_ciphertext || !botConnection.bot_token_nonce) {
+      throw new Error("Bot token is not stored for this connection.");
+    }
+
+    const botToken = await decryptBotToken(
+      botConnection.bot_token_ciphertext,
+      botConnection.bot_token_nonce,
+    );
     const topicId = getTopicId(message);
     const topicName = await resolveTopicName(botConnection.user_id, message);
     const contentHash = await computeContentHash(update);
     const isEdit = Boolean(update.edited_message || update.edited_channel_post || message.edit_date);
+    const uploadedFile = await uploadTelegramFile(botConnection.user_id, message, botToken);
 
     if (topicId && topicName) {
       await upsertTopic(botConnection.user_id, message.chat.id, topicId, topicName);
@@ -238,10 +397,10 @@ Deno.serve(async (request: Request) => {
           forward_date: toIso(message.forward_date),
           reply_to_message_id: message.reply_to_message?.message_id ?? null,
           media_group_id: message.media_group_id ?? null,
-          file_path: null,
-          file_name: null,
-          file_size: null,
-          file_mime_type: null,
+          file_path: uploadedFile.file_path,
+          file_name: uploadedFile.file_name,
+          file_size: uploadedFile.file_size,
+          file_mime_type: uploadedFile.file_mime_type,
           is_edit: isEdit,
           edit_date: toIso(message.edit_date),
           content_hash: contentHash,
@@ -255,11 +414,11 @@ Deno.serve(async (request: Request) => {
         throw new Error(`Failed to upsert message: ${upsertError.message}`);
       }
     }
-  } catch (error) {
-    console.error("telegram-webhook processing failed", error);
+  } catch (caughtError) {
+    console.error("telegram-webhook processing failed", caughtError);
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : String(error),
+        error: caughtError instanceof Error ? caughtError.message : String(caughtError),
       }),
       {
         status: 500,

@@ -218,4 +218,14 @@ export class SyncEngine {
     void getClient().removeChannel(this.realtimeChannel);
     this.realtimeChannel = null;
   }
+
+  async downloadFile(storagePath: string): Promise<ArrayBuffer> {
+    const { data, error } = await getClient().storage.from("telegram-files").download(storagePath);
+
+    if (error || !data) {
+      throw new Error(`Failed to download file from storage: ${error?.message ?? storagePath}`);
+    }
+
+    return await data.arrayBuffer();
+  }
 }

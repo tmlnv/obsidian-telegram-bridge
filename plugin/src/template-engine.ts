@@ -63,6 +63,33 @@ function getUserLabel(message: MessageRow): string {
     : message.sender_name ?? "Unknown sender";
 }
 
+function getFileBaseName(message: MessageRow): string {
+  if (!message.file_name) {
+    return `message-${message.telegram_message_id}`;
+  }
+
+  const parts = message.file_name.split(".");
+  if (parts.length <= 1) {
+    return message.file_name;
+  }
+
+  parts.pop();
+  return parts.join(".") || `message-${message.telegram_message_id}`;
+}
+
+function getFileExtension(message: MessageRow): string {
+  if (message.file_name?.includes(".")) {
+    return message.file_name.split(".").pop() ?? "";
+  }
+
+  if (!message.file_mime_type) {
+    return "";
+  }
+
+  const suffix = message.file_mime_type.split("/").pop() ?? "";
+  return suffix === "jpeg" ? "jpg" : suffix;
+}
+
 export function expandTemplate(
   template: string,
   message: MessageRow,
@@ -84,6 +111,8 @@ export function expandTemplate(
   result = result.replace(/\{\{user\}\}/g, getUserLabel(message));
   result = result.replace(/\{\{messageId\}\}/g, String(message.telegram_message_id));
   result = result.replace(/\{\{messageType\}\}/g, message.message_type);
+  result = result.replace(/\{\{file:name\}\}/g, getFileBaseName(message));
+  result = result.replace(/\{\{file:extension\}\}/g, getFileExtension(message));
 
   if (options.isPath) {
     return normalizeTemplatePath(sanitizePath(result));

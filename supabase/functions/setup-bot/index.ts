@@ -5,6 +5,45 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function decodeBase64(value: string): Uint8Array {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function encodeBase64(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes));
+}
+
+async function importEncryptionKey(): Promise<CryptoKey> {
+  const rawKey = Deno.env.get("BOT_TOKEN_ENCRYPTION_KEY");
+  if (!rawKey) {
+    throw new Error("Missing BOT_TOKEN_ENCRYPTION_KEY secret.");
+  }
+
+  return await crypto.subtle.importKey(
+    "raw",
+    decodeBase64(rawKey),
+    { name: "AES-GCM" },
+    false,
+    ["encrypt", "decrypt"],
+  );
+}
+
+async function encryptBotToken(botToken: string): Promise<{ ciphertext: string; nonce: string }> {
+  const key = await importEncryptionKey();
+  const nonce = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: nonce },
+    key,
+    new TextEncoder().encode(botToken),
+  );
+
+  return {
+    ciphertext: encodeBase64(new Uint8Array(encrypted)),
+    nonce: encodeBase64(nonce),
+  };
+}
+
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -60,6 +99,7 @@ Deno.serve(async (request: Request) => {
   }
 
   const webhookSecret = crypto.randomUUID();
+  const encryptedBotToken = await encryptBotToken(botToken);
   const tokenBytes = new TextEncoder().encode(botToken);
   const hashBuffer = await crypto.subtle.digest("SHA-256", tokenBytes);
   const botTokenHash = Array.from(new Uint8Array(hashBuffer))
@@ -72,6 +112,8 @@ Deno.serve(async (request: Request) => {
       telegram_bot_id: meData.result.id,
       bot_token_hash: botTokenHash,
       webhook_secret: webhookSecret,
+      bot_token_ciphertext: encryptedBotToken.ciphertext,
+      bot_token_nonce: encryptedBotToken.nonce,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" },
