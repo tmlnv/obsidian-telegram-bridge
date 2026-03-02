@@ -14,6 +14,8 @@ import { SyncEngine } from "./sync-engine";
 import { buildDefaultNotePath, buildMessageMarker, getBlockEndMarker, renderMessageBlock } from "./message-renderer";
 import { upsertMessageBlock } from "./vault-writer";
 import type { MessageRow } from "./types";
+import { findMatchingRule } from "./distribution-rules";
+import { expandTemplate } from "./template-engine";
 
 function createClientId(): string {
   if (globalThis.crypto?.randomUUID) {
@@ -232,9 +234,12 @@ export default class ObsidianTelegramPlugin extends Plugin {
   }
 
   private async processMessage(message: MessageRow): Promise<void> {
-    const notePath = buildDefaultNotePath(message, this.settings);
+    const rule = findMatchingRule(message, this.settings.distribution_rules);
+    const notePath = rule
+      ? expandTemplate(rule.note_path_template, message, { isPath: true })
+      : buildDefaultNotePath(message, this.settings);
     const marker = buildMessageMarker(message);
-    const blockContent = renderMessageBlock(message);
+    const blockContent = renderMessageBlock(message, rule, this.settings);
 
     await upsertMessageBlock(
       this.app.vault,

@@ -57,16 +57,42 @@ export interface SyncCursor {
   last_processed_message_id: number | null;
 }
 
+export type FilterOperation = "=" | "!=" | "~" | "!~";
+
+export type ConditionType = "all" | "chat" | "topic" | "user" | "content";
+
+export interface FilterCondition {
+  type: ConditionType;
+  operation: FilterOperation;
+  value: string;
+}
+
+export interface DistributionRule {
+  filter_query: string;
+  note_path_template: string;
+  message_template: string;
+}
+
 export interface PluginSettings {
   supabase_url: string;
   supabase_anon_key: string;
   client_id: string;
   email: string;
   default_note_folder: string;
+  default_note_path_template: string;
+  default_message_template: string;
+  distribution_rules: DistributionRule[];
   poll_interval_seconds: number;
   is_realtime_enabled: boolean;
   topic_names: TopicNameCacheItem[];
 }
+
+export const DEFAULT_DISTRIBUTION_RULE: DistributionRule = {
+  filter_query: "{{all}}",
+  note_path_template: "Telegram/{{chat}}/{{topic}}Messages.md",
+  message_template:
+    "- {{messageDate:YYYY-MM-DD HH:mm:ss}} {{user}}\n  - Chat: {{chat}}\n  - Type: {{messageType}}\n\n  {{content}}",
+};
 
 export const DEFAULT_SETTINGS: PluginSettings = {
   supabase_url: "",
@@ -74,6 +100,9 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   client_id: "",
   email: "",
   default_note_folder: "Telegram",
+  default_note_path_template: DEFAULT_DISTRIBUTION_RULE.note_path_template,
+  default_message_template: DEFAULT_DISTRIBUTION_RULE.message_template,
+  distribution_rules: [DEFAULT_DISTRIBUTION_RULE],
   poll_interval_seconds: 30,
   is_realtime_enabled: false,
   topic_names: [],

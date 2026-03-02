@@ -72,6 +72,38 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
           }),
       );
 
+    new Setting(containerEl)
+      .setName("Note path template")
+      .setDesc("Path template for the default routing rule.")
+      .addText((text) =>
+        text
+          .setPlaceholder("Telegram/{{chat}}/{{topic}}Messages.md")
+          .setValue(this.plugin.settings.default_note_path_template)
+          .onChange(async (value) => {
+            const nextValue = value.trim() || "Telegram/{{chat}}/{{topic}}Messages.md";
+            this.plugin.settings.default_note_path_template = nextValue;
+            this.plugin.settings.distribution_rules[0].note_path_template = nextValue;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Message template")
+      .setDesc("Template used for the default rendered message block.")
+      .addTextArea((text) =>
+        text
+          .setPlaceholder("- {{messageDate:YYYY-MM-DD HH:mm:ss}} {{user}}")
+          .setValue(this.plugin.settings.default_message_template)
+          .onChange(async (value) => {
+            const nextValue =
+              value.trim() ||
+              "- {{messageDate:YYYY-MM-DD HH:mm:ss}} {{user}}\n  - Chat: {{chat}}\n  - Type: {{messageType}}\n\n  {{content}}";
+            this.plugin.settings.default_message_template = nextValue;
+            this.plugin.settings.distribution_rules[0].message_template = nextValue;
+            await this.plugin.saveSettings();
+          }),
+      );
+
     containerEl.createEl("h3", { text: "Authentication" });
 
     new Setting(containerEl)
