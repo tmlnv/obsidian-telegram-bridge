@@ -132,6 +132,44 @@ export default class ObsidianTelegramPlugin extends Plugin {
     this.statusIndicator?.setConnected();
   }
 
+  async setupBot(botToken: string): Promise<{ bot_username: string; webhook_url?: string }> {
+    if (!this.isSupabaseConfigured()) {
+      throw new Error("Configure Supabase URL and anon key first.");
+    }
+
+    const session = getSession();
+    if (!session) {
+      throw new Error("Sign in before setting up the Telegram bot.");
+    }
+
+    const response = await fetch(`${this.settings.supabase_url}/functions/v1/setup-bot`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: this.settings.supabase_anon_key,
+      },
+      body: JSON.stringify({ bot_token: botToken }),
+    });
+
+    const payload = (await response.json().catch(() => null)) as
+      | { error?: string; bot_username?: string; webhook_url?: string }
+      | null;
+
+    if (!response.ok) {
+      throw new Error(payload?.error ?? `Bot setup failed with status ${response.status}.`);
+    }
+
+    if (!payload?.bot_username) {
+      throw new Error("Bot setup succeeded but the response was incomplete.");
+    }
+
+    return {
+      bot_username: payload.bot_username,
+      webhook_url: payload.webhook_url,
+    };
+  }
+
   getSessionEmail(): string {
     return getSession()?.user.email ?? "";
   }

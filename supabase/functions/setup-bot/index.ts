@@ -72,6 +72,7 @@ Deno.serve(async (request: Request) => {
       telegram_bot_id: meData.result.id,
       bot_token_hash: botTokenHash,
       webhook_secret: webhookSecret,
+      updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" },
   );
@@ -83,11 +84,43 @@ Deno.serve(async (request: Request) => {
     });
   }
 
+  const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/telegram-webhook`;
+  const webhookResponse = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      url: webhookUrl,
+      secret_token: webhookSecret,
+      allowed_updates: [
+        "message",
+        "edited_message",
+        "channel_post",
+        "edited_channel_post",
+      ],
+    }),
+  });
+  const webhookData = await webhookResponse.json();
+
+  if (!webhookData.ok) {
+    return new Response(
+      JSON.stringify({
+        error: webhookData.description ?? "Telegram setWebhook failed",
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+
   return new Response(
     JSON.stringify({
       ok: true,
       bot_username: meData.result.username,
-      note: "Webhook registration and encrypted bot-token storage are the next implementation steps.",
+      telegram_bot_id: meData.result.id,
+      webhook_url: webhookUrl,
     }),
     {
       status: 200,

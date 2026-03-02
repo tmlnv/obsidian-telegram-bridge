@@ -172,22 +172,11 @@ export class SyncEngine {
   }
 
   private async fetchMessagesAfterCursor(): Promise<MessageRow[]> {
-    let query = getClient()
-      .from("messages")
-      .select("*")
-      .order("created_at", { ascending: true })
-      .order("id", { ascending: true })
-      .limit(50);
-
-    if (this.cursor.last_processed_message_created_at) {
-      const createdAt = this.cursor.last_processed_message_created_at;
-      const lastId = this.cursor.last_processed_message_id ?? 0;
-      query = query.or(
-        `created_at.gt.${createdAt},and(created_at.eq.${createdAt},id.gt.${lastId})`,
-      );
-    }
-
-    const { data, error } = await query;
+    const { data, error } = await getClient().rpc("fetch_messages_after_cursor", {
+      p_last_processed_message_created_at: this.cursor.last_processed_message_created_at,
+      p_last_processed_message_id: this.cursor.last_processed_message_id,
+      p_limit: 50,
+    });
 
     if (error) {
       throw new Error(`Failed to fetch messages: ${error.message}`);

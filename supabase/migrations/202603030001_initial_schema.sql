@@ -78,6 +78,30 @@ create index idx_messages_cursor
 create index idx_messages_topic
   on public.messages (user_id, telegram_chat_id, topic_id);
 
+create or replace function public.fetch_messages_after_cursor(
+  p_last_processed_message_created_at timestamptz default null,
+  p_last_processed_message_id bigint default null,
+  p_limit integer default 50
+)
+returns setof public.messages
+language sql
+security invoker
+as $$
+  select m.*
+  from public.messages as m
+  where m.user_id = auth.uid()
+    and (
+      p_last_processed_message_created_at is null
+      or m.created_at > p_last_processed_message_created_at
+      or (
+        m.created_at = p_last_processed_message_created_at
+        and m.id > coalesce(p_last_processed_message_id, 0)
+      )
+    )
+  order by m.created_at asc, m.id asc
+  limit greatest(p_limit, 1);
+$$;
+
 alter table public.bot_connections enable row level security;
 alter table public.topics enable row level security;
 alter table public.messages enable row level security;

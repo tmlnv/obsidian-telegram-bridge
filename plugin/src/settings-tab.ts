@@ -14,6 +14,7 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
     containerEl.empty();
     let emailValue = this.plugin.settings.email;
     let passwordValue = "";
+    let botTokenValue = "";
 
     containerEl.createEl("h2", { text: "Obsidian Telegram" });
 
@@ -134,6 +135,31 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
           }
         }),
       );
+
+    if (this.plugin.hasSession()) {
+      containerEl.createEl("h3", { text: "Telegram Bot" });
+
+      new Setting(containerEl)
+        .setName("Bot token")
+        .setDesc("Token from BotFather. Sent to the setup function and not stored in plugin settings.")
+        .addText((text) => {
+          text.inputEl.type = "password";
+          text.setPlaceholder("123456:ABC-DEF...").onChange((value) => {
+            botTokenValue = value.trim();
+          });
+        })
+        .addButton((button) =>
+          button.setButtonText("Setup bot").setCta().onClick(async () => {
+            try {
+              const result = await this.plugin.setupBot(botTokenValue);
+              const webhookSuffix = result.webhook_url ? ` Webhook: ${result.webhook_url}` : "";
+              new Notice(`Connected @${result.bot_username}.${webhookSuffix}`);
+            } catch (error) {
+              new Notice(error instanceof Error ? error.message : String(error));
+            }
+          }),
+        );
+    }
 
     new Setting(containerEl)
       .setName("Poll interval")
