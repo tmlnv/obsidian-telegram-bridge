@@ -27,7 +27,7 @@ export class SyncEngine {
   private realtimeChannel: RealtimeChannel | null = null;
   private isPolling = false;
   private cursor: SyncCursor = {
-    last_processed_message_created_at: null,
+    last_processed_message_updated_at: null,
     last_processed_message_id: null,
   };
 
@@ -85,7 +85,7 @@ export class SyncEngine {
       await this.onMessages(messages);
       const lastMessage = messages[messages.length - 1];
       this.cursor = {
-        last_processed_message_created_at: lastMessage.created_at,
+        last_processed_message_updated_at: lastMessage.updated_at,
         last_processed_message_id: lastMessage.id,
       };
       await this.updateCursor();
@@ -115,7 +115,7 @@ export class SyncEngine {
     if (data) {
       const row = data as SyncClientRow;
       this.cursor = {
-        last_processed_message_created_at: row.last_processed_message_created_at,
+        last_processed_message_updated_at: row.last_processed_message_updated_at,
         last_processed_message_id: row.last_processed_message_id,
       };
       return;
@@ -137,7 +137,7 @@ export class SyncEngine {
       vault_fingerprint: this.vaultFingerprint,
       platform: Platform.isDesktopApp ? "desktop" : "mobile",
       plugin_version: this.pluginVersion,
-      last_processed_message_created_at: cursor.last_processed_message_created_at,
+      last_processed_message_updated_at: cursor.last_processed_message_updated_at,
       last_processed_message_id: cursor.last_processed_message_id,
       last_sync_at: new Date().toISOString(),
     };
@@ -173,7 +173,7 @@ export class SyncEngine {
 
   private async fetchMessagesAfterCursor(): Promise<MessageRow[]> {
     const { data, error } = await getClient().rpc("fetch_messages_after_cursor", {
-      p_last_processed_message_created_at: this.cursor.last_processed_message_created_at,
+      p_last_processed_message_updated_at: this.cursor.last_processed_message_updated_at,
       p_last_processed_message_id: this.cursor.last_processed_message_id,
       p_limit: 50,
     });
@@ -199,6 +199,18 @@ export class SyncEngine {
         "postgres_changes",
         {
           event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        () => {
+          void this.poll();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
           schema: "public",
           table: "messages",
           filter: `user_id=eq.${session.user.id}`,

@@ -218,6 +218,10 @@ export default class ObsidianTelegramPlugin extends Plugin {
       throw new Error("Bot setup succeeded but the response was incomplete.");
     }
 
+    this.settings.connected_bot_username = payload.bot_username;
+    this.settings.connected_bot_webhook_url = payload.webhook_url ?? "";
+    await this.saveSettings();
+
     return {
       bot_username: payload.bot_username,
       webhook_url: payload.webhook_url,

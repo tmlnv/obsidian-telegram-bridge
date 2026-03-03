@@ -45,7 +45,7 @@ export interface SyncClientRow {
   vault_fingerprint: string | null;
   platform: string | null;
   plugin_version: string | null;
-  last_processed_message_created_at: string | null;
+  last_processed_message_updated_at: string | null;
   last_processed_message_id: number | null;
   last_sync_at: string | null;
   created_at: string;
@@ -53,7 +53,7 @@ export interface SyncClientRow {
 }
 
 export interface SyncCursor {
-  last_processed_message_created_at: string | null;
+  last_processed_message_updated_at: string | null;
   last_processed_message_id: number | null;
 }
 
@@ -92,6 +92,8 @@ export interface PluginSettings {
   supabase_anon_key: string;
   client_id: string;
   email: string;
+  connected_bot_username: string;
+  connected_bot_webhook_url: string;
   default_note_folder: string;
   default_note_path_template: string;
   default_message_template: string;
@@ -109,6 +111,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   supabase_anon_key: "",
   client_id: "",
   email: "",
+  connected_bot_username: "",
+  connected_bot_webhook_url: "",
   default_note_folder: "Telegram",
   default_note_path_template: DEFAULT_DISTRIBUTION_RULE.note_path_template,
   default_message_template: DEFAULT_DISTRIBUTION_RULE.message_template,

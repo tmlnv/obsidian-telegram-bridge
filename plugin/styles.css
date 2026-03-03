@@ -3,3 +3,45 @@
   align-items: center;
   gap: 6px;
 }
+
+.obsidian-telegram-settings-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  border-radius: 12px;
+}
+
+.obsidian-telegram-connection-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.obsidian-telegram-connection-label {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.obsidian-telegram-connection-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.obsidian-telegram-connection-value {
+  color: var(--text-normal);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.obsidian-telegram-connection-description {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  word-break: break-all;
+}

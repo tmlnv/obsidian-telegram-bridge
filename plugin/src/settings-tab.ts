@@ -19,6 +19,7 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
     let botTokenValue = "";
 
     containerEl.createEl("h2", { text: "Obsidian Telegram" });
+    this.renderConnectionHeader(containerEl);
 
     new Setting(containerEl)
       .setName("Supabase URL")
@@ -354,5 +355,48 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
     if (!hasFallback) {
       this.plugin.settings.distribution_rules.push(createDefaultDistributionRule());
     }
+  }
+
+  private renderConnectionHeader(containerEl: HTMLElement): void {
+    const header = containerEl.createDiv({ cls: "obsidian-telegram-settings-header" });
+    const projectHost = this.plugin.settings.supabase_url
+      ? (() => {
+          try {
+            return new URL(this.plugin.settings.supabase_url).host;
+          } catch {
+            return this.plugin.settings.supabase_url;
+          }
+        })()
+      : "Not configured";
+
+    this.createConnectionRow(header, "Supabase", this.plugin.isSupabaseConfigured() ? "Configured" : "Missing", projectHost);
+    this.createConnectionRow(
+      header,
+      "Auth",
+      this.plugin.hasSession() ? "Connected" : "Signed out",
+      this.plugin.getSessionEmail() || this.plugin.settings.email || "No user session",
+    );
+    this.createConnectionRow(
+      header,
+      "Telegram Bot",
+      this.plugin.settings.connected_bot_username ? "Connected" : "Not connected",
+      this.plugin.settings.connected_bot_username
+        ? `@${this.plugin.settings.connected_bot_username}`
+        : "Run Setup bot after sign-in",
+    );
+  }
+
+  private createConnectionRow(
+    containerEl: HTMLElement,
+    label: string,
+    value: string,
+    description: string,
+  ): void {
+    const row = containerEl.createDiv({ cls: "obsidian-telegram-connection-row" });
+    row.createEl("div", { cls: "obsidian-telegram-connection-label", text: label });
+
+    const body = row.createDiv({ cls: "obsidian-telegram-connection-body" });
+    body.createEl("div", { cls: "obsidian-telegram-connection-value", text: value });
+    body.createEl("div", { cls: "obsidian-telegram-connection-description", text: description });
   }
 }
