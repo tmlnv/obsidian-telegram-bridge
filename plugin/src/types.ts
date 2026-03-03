@@ -74,10 +74,13 @@ export interface DistributionRule {
   file_path_template: string;
 }
 
+export const DEFAULT_NOTE_PATH_TEMPLATE =
+  "Telegram/{{chat}}/{{topic}}{{messageDate:YYYY-MM-DD HH-mm-ss}}-{{messageId}}.md";
+
 export function createDefaultDistributionRule(): DistributionRule {
   return {
     filter_query: "{{all}}",
-    note_path_template: "Telegram/{{chat}}/{{topic}}Messages.md",
+    note_path_template: DEFAULT_NOTE_PATH_TEMPLATE,
     file_path_template: "Telegram/files/{{chat}}/{{file:name}}.{{file:extension}}",
     message_template:
       "- {{messageDate:YYYY-MM-DD HH:mm:ss}} {{user}}\n  - Chat: {{chat}}\n  - Type: {{messageType}}\n\n  {{content}}",

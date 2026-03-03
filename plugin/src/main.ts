@@ -342,14 +342,16 @@ export default class ObsidianTelegramPlugin extends Plugin {
         }
 
         const candidate = rule as Partial<PluginSettings["distribution_rules"][number]>;
+        const defaultRule = createDefaultDistributionRule();
+
         return {
           filter_query: candidate.filter_query?.trim() || "{{all}}",
           note_path_template:
-            candidate.note_path_template?.trim() || createDefaultDistributionRule().note_path_template,
+            candidate.note_path_template?.trim() || defaultRule.note_path_template,
           file_path_template:
-            candidate.file_path_template?.trim() || createDefaultDistributionRule().file_path_template,
+            candidate.file_path_template?.trim() || defaultRule.file_path_template,
           message_template:
-            candidate.message_template?.trim() || createDefaultDistributionRule().message_template,
+            candidate.message_template?.trim() || defaultRule.message_template,
         };
       })
       .filter((rule): rule is PluginSettings["distribution_rules"][number] => rule !== null);

@@ -105,7 +105,7 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
         .setDesc("Path template used when this rule matches.")
         .addText((text) =>
           text
-            .setPlaceholder("Telegram/{{chat}}/{{topic}}Messages.md")
+            .setPlaceholder("Telegram/{{chat}}/{{topic}}{{messageDate:YYYY-MM-DD HH-mm-ss}}-{{messageId}}.md")
             .setValue(rule.note_path_template)
             .onChange(async (value) => {
               this.plugin.settings.distribution_rules[index].note_path_template =
