@@ -7,9 +7,11 @@ import {
 import { ObsidianTelegramSettingTab } from "./settings-tab";
 import { StatusIndicator } from "./status-indicator";
 import {
+  completeEmailOtp,
   destroySupabase,
   getSession,
   initSupabase,
+  requestEmailOtp,
   restoreSession,
   signIn,
   signOut,
@@ -128,6 +130,34 @@ export default class ObsidianTelegramPlugin extends Plugin {
     initSupabase(this.settings.supabase_url, this.settings.supabase_anon_key);
     const session = await signIn(email, password);
     this.settings.email = session.user.email ?? email;
+    await this.saveSettings();
+    await this.startSync();
+    this.statusIndicator?.setConnected();
+  }
+
+  async sendEmailCode(email: string): Promise<void> {
+    if (!this.isSupabaseConfigured()) {
+      throw new Error("Configure Supabase URL and anon key first.");
+    }
+
+    initSupabase(this.settings.supabase_url, this.settings.supabase_anon_key);
+    await requestEmailOtp(email);
+    this.settings.email = email;
+    await this.saveSettings();
+  }
+
+  async completeEmailCodeSignIn(codeOrUrl: string): Promise<void> {
+    if (!this.isSupabaseConfigured()) {
+      throw new Error("Configure Supabase URL and anon key first.");
+    }
+
+    if (!this.settings.email) {
+      throw new Error("Enter the email address first so the plugin can verify the email code.");
+    }
+
+    initSupabase(this.settings.supabase_url, this.settings.supabase_anon_key);
+    const session = await completeEmailOtp(codeOrUrl, this.settings.email);
+    this.settings.email = session.user.email ?? this.settings.email;
     await this.saveSettings();
     await this.startSync();
     this.statusIndicator?.setConnected();

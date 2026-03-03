@@ -15,6 +15,7 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
     containerEl.empty();
     let emailValue = this.plugin.settings.email;
     let passwordValue = "";
+    let emailCodeValue = "";
     let botTokenValue = "";
 
     containerEl.createEl("h2", { text: "Obsidian Telegram" });
@@ -191,13 +192,48 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Password")
-      .setDesc("Used only for sign-in. The plugin relies on the Supabase session after that.")
+      .setDesc("Optional fallback for direct password sign-in.")
       .addText((text) => {
         text.inputEl.type = "password";
         text.setPlaceholder("Password").onChange((value) => {
           passwordValue = value;
         });
       });
+
+    new Setting(containerEl)
+      .setName("Email code")
+      .setDesc("Request a passwordless sign-in code by email.")
+      .addButton((button) =>
+        button.setButtonText("Send email code").setCta().onClick(async () => {
+          try {
+            await this.plugin.sendEmailCode(emailValue);
+            new Notice("Email code sent. Paste the code or email URL below to complete sign-in.");
+            this.display();
+          } catch (error) {
+            new Notice(error instanceof Error ? error.message : String(error));
+          }
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName("Email code or URL")
+      .setDesc("Paste the OTP code from the email, or paste the full email URL.")
+      .addTextArea((text) =>
+        text.setPlaceholder("123456 or https://...token=...").onChange((value) => {
+          emailCodeValue = value.trim();
+        }),
+      )
+      .addButton((button) =>
+        button.setButtonText("Complete email sign-in").onClick(async () => {
+          try {
+            await this.plugin.completeEmailCodeSignIn(emailCodeValue);
+            new Notice("Signed in with email code.");
+            this.display();
+          } catch (error) {
+            new Notice(error instanceof Error ? error.message : String(error));
+          }
+        }),
+      );
 
     new Setting(containerEl)
       .setName("Session")

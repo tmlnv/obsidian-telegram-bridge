@@ -74,6 +74,75 @@ export async function signIn(email: string, password: string): Promise<Session> 
   return data.session;
 }
 
+export async function requestEmailOtp(email: string): Promise<void> {
+  const { error } = await getClient().auth.signInWithOtp({
+    email,
+  });
+
+  if (error) {
+    throw new Error(`Failed to send email code: ${error.message}`);
+  }
+}
+
+function extractEmailOtpToken(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    throw new Error("Email code is required.");
+  }
+
+  if (!trimmed.includes("://") && !trimmed.includes("?")) {
+    return trimmed;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error("Invalid email code or URL.");
+  }
+
+  const token = parsed.searchParams.get("token");
+  if (!token) {
+    throw new Error("URL does not contain an OTP token.");
+  }
+
+  return token;
+}
+
+async function verifyEmailOtpWithType(
+  email: string,
+  token: string,
+  type: "signup" | "email" | "magiclink",
+): Promise<Session | null> {
+  const { data, error } = await getClient().auth.verifyOtp({
+    email,
+    token,
+    type,
+  });
+
+  if (error || !data.session) {
+    return null;
+  }
+
+  currentSession = data.session;
+  return data.session;
+}
+
+export async function completeEmailOtp(input: string, email: string): Promise<Session> {
+  const token = extractEmailOtpToken(input);
+  const session =
+    (await verifyEmailOtpWithType(email, token, "signup")) ??
+    (await verifyEmailOtpWithType(email, token, "email")) ??
+    (await verifyEmailOtpWithType(email, token, "magiclink"));
+
+  if (!session) {
+    throw new Error("Email code is invalid or expired.");
+  }
+
+  currentSession = session;
+  return session;
+}
+
 export async function signOut(): Promise<void> {
   const { error } = await getClient().auth.signOut();
   if (error) {
