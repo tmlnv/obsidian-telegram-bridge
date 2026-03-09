@@ -72,24 +72,6 @@ interface BotConnectionRow {
   bot_token_nonce: string | null;
 }
 
-interface UsageEstimateRow {
-  message_count: number;
-  file_count: number;
-  estimated_database_bytes: number;
-  estimated_file_bytes: number;
-  estimated_total_bytes: number;
-}
-
-interface UserPreferenceRow {
-  user_id: string;
-  estimated_storage_limit_bytes: number;
-  warning_threshold_percent: number;
-  telegram_warnings_enabled: boolean;
-  notification_chat_id: number | null;
-  last_storage_warning_sent_at: string | null;
-  last_storage_warning_threshold_percent: number | null;
-}
-
 function decodeBase64(value: string): Uint8Array {
   const binary = atob(value);
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
@@ -354,158 +336,6 @@ async function upsertNotificationChat(userId: string, chatId: number): Promise<v
   }
 }
 
-async function loadUserPreferences(userId: string): Promise<UserPreferenceRow> {
-  const { data, error } = await supabaseAdmin
-    .from("user_preferences")
-    .select("*")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`Failed to load usage preferences: ${error.message}`);
-  }
-
-  if (data) {
-    return data as UserPreferenceRow;
-  }
-
-  const { data: created, error: createError } = await supabaseAdmin
-    .from("user_preferences")
-    .upsert({
-      user_id: userId,
-      updated_at: new Date().toISOString(),
-    })
-    .select("*")
-    .single();
-
-  if (createError) {
-    throw new Error(`Failed to initialize usage preferences: ${createError.message}`);
-  }
-
-  return created as UserPreferenceRow;
-}
-
-async function getUsageEstimateForUser(userId: string): Promise<UsageEstimateRow> {
-  const { data, error } = await supabaseAdmin.rpc("get_usage_estimate", {
-    p_user_id: userId,
-  });
-
-  if (error) {
-    throw new Error(`Failed to calculate usage estimate: ${error.message}`);
-  }
-
-  const row = (Array.isArray(data) ? data[0] : data) as UsageEstimateRow | null;
-  return (
-    row ?? {
-      message_count: 0,
-      file_count: 0,
-      estimated_database_bytes: 0,
-      estimated_file_bytes: 0,
-      estimated_total_bytes: 0,
-    }
-  );
-}
-
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
-    return "0 B";
-  }
-
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let value = bytes;
-  let unitIndex = 0;
-
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-
-  const rounded = value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1);
-  return `${rounded} ${units[unitIndex]}`;
-}
-
-async function clearUsageWarningState(userId: string): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from("user_preferences")
-    .update({
-      last_storage_warning_threshold_percent: null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", userId);
-
-  if (error) {
-    throw new Error(`Failed to reset warning state: ${error.message}`);
-  }
-}
-
-async function markUsageWarningSent(userId: string, thresholdPercent: number): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from("user_preferences")
-    .update({
-      last_storage_warning_sent_at: new Date().toISOString(),
-      last_storage_warning_threshold_percent: thresholdPercent,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", userId);
-
-  if (error) {
-    throw new Error(`Failed to persist warning state: ${error.message}`);
-  }
-}
-
-async function sendTelegramMessage(botToken: string, chatId: number, text: string): Promise<void> {
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-    }),
-  });
-  const payload = await response.json().catch(() => null);
-
-  if (!response.ok || !payload?.ok) {
-    throw new Error(payload?.description ?? `Failed to send Telegram warning: ${response.status}`);
-  }
-}
-
-async function maybeSendUsageWarning(
-  userId: string,
-  botToken: string,
-): Promise<void> {
-  const preferences = await loadUserPreferences(userId);
-  const usageEstimate = await getUsageEstimateForUser(userId);
-  const limitBytes = preferences.estimated_storage_limit_bytes;
-
-  if (!preferences.telegram_warnings_enabled || !preferences.notification_chat_id || limitBytes <= 0) {
-    if (preferences.last_storage_warning_threshold_percent !== null) {
-      await clearUsageWarningState(userId);
-    }
-    return;
-  }
-
-  const usagePercent = Math.round((usageEstimate.estimated_total_bytes / limitBytes) * 100);
-  if (usagePercent < preferences.warning_threshold_percent) {
-    if (preferences.last_storage_warning_threshold_percent !== null) {
-      await clearUsageWarningState(userId);
-    }
-    return;
-  }
-
-  if (preferences.last_storage_warning_threshold_percent === preferences.warning_threshold_percent) {
-    return;
-  }
-
-  const warningMessage =
-    `Storage warning: estimated Supabase usage is ${usagePercent}% of your configured limit.\n` +
-    `Used: ${formatBytes(usageEstimate.estimated_total_bytes)} of ${formatBytes(limitBytes)}.\n` +
-    `Messages: ${usageEstimate.message_count}. Files: ${usageEstimate.file_count}.\n` +
-    `Open the Obsidian plugin settings to review the estimate and adjust the threshold if needed.`;
-
-  await sendTelegramMessage(botToken, preferences.notification_chat_id, warningMessage);
-  await markUsageWarningSent(userId, preferences.warning_threshold_percent);
-}
-
 Deno.serve(async (request: Request) => {
   if (request.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
@@ -606,8 +436,6 @@ Deno.serve(async (request: Request) => {
         throw new Error(`Failed to upsert message: ${upsertError.message}`);
       }
     }
-
-    await maybeSendUsageWarning(botConnection.user_id, botToken);
   } catch (caughtError) {
     console.error("telegram-webhook processing failed", caughtError);
     return new Response(

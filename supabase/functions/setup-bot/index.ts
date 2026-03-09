@@ -127,6 +127,7 @@ Deno.serve(async (request: Request) => {
   }
 
   const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/telegram-webhook`;
+  const usageWarningCheckUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/usage-warning-check`;
   const webhookResponse = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
     method: "POST",
     headers: {
@@ -155,6 +156,22 @@ Deno.serve(async (request: Request) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
     );
+  }
+
+  const { error: settingError } = await admin.from("internal_settings").upsert(
+    {
+      key: "usage_warning_check_url",
+      value: usageWarningCheckUrl,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" },
+  );
+
+  if (settingError) {
+    return new Response(JSON.stringify({ error: settingError.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   return new Response(
