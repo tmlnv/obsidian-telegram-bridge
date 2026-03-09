@@ -57,6 +57,27 @@ export interface SyncCursor {
   last_processed_message_id: number | null;
 }
 
+export interface UsageEstimateRow {
+  message_count: number;
+  file_count: number;
+  estimated_database_bytes: number;
+  estimated_file_bytes: number;
+  estimated_total_bytes: number;
+  latest_message_at: string | null;
+}
+
+export interface UserPreferencesRow {
+  user_id: string;
+  estimated_storage_limit_bytes: number;
+  warning_threshold_percent: number;
+  telegram_warnings_enabled: boolean;
+  notification_chat_id: number | null;
+  last_storage_warning_sent_at: string | null;
+  last_storage_warning_threshold_percent: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type FilterOperation = "=" | "!=" | "~" | "!~";
 
 export type ConditionType = "all" | "chat" | "topic" | "user" | "content";
@@ -101,6 +122,9 @@ export interface PluginSettings {
   distribution_rules: DistributionRule[];
   poll_interval_seconds: number;
   is_realtime_enabled: boolean;
+  estimated_storage_limit_mb: number;
+  warning_threshold_percent: number;
+  telegram_warnings_enabled: boolean;
   topic_names: TopicNameCacheItem[];
 }
 
@@ -120,5 +144,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   distribution_rules: [createDefaultDistributionRule()],
   poll_interval_seconds: 30,
   is_realtime_enabled: false,
+  estimated_storage_limit_mb: 1024,
+  warning_threshold_percent: 80,
+  telegram_warnings_enabled: true,
   topic_names: [],
 };

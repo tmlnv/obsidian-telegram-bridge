@@ -13,7 +13,12 @@ export class StatusIndicator {
     this.el.setText("Telegram: idle");
   }
 
-  setConnected(): void {
+  setConnected(usagePercent?: number): void {
+    if (typeof usagePercent === "number") {
+      this.el.setText(`Telegram: connected (${usagePercent}% used est.)`);
+      return;
+    }
+
     this.el.setText("Telegram: connected");
   }
 
@@ -23,6 +28,10 @@ export class StatusIndicator {
 
   setSyncing(): void {
     this.el.setText("Telegram: syncing");
+  }
+
+  setWarning(usagePercent: number): void {
+    this.el.setText(`Telegram: warning (${usagePercent}% used est.)`);
   }
 
   setError(message: string): void {

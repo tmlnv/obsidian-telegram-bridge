@@ -9,6 +9,7 @@ import { StatusIndicator } from "./status-indicator";
 import {
   completeEmailOtp,
   destroySupabase,
+  getClient,
   getSession,
   initSupabase,
   requestEmailOtp,
@@ -19,7 +20,11 @@ import {
 import { SyncEngine } from "./sync-engine";
 import { buildDefaultNotePath, buildMessageMarker, getBlockEndMarker, renderMessageBlock } from "./message-renderer";
 import { saveBinaryFile, upsertMessageBlock } from "./vault-writer";
-import type { MessageRow } from "./types";
+import type {
+  MessageRow,
+  UsageEstimateRow,
+  UserPreferencesRow,
+} from "./types";
 import { findMatchingRule } from "./distribution-rules";
 import { expandTemplate } from "./template-engine";
 
@@ -35,6 +40,8 @@ export default class ObsidianTelegramPlugin extends Plugin {
   settings: PluginSettings = DEFAULT_SETTINGS;
   private statusIndicator: StatusIndicator | null = null;
   private syncEngine: SyncEngine | null = null;
+  private latestUsageEstimate: UsageEstimateRow | null = null;
+  private latestUserPreferences: UserPreferencesRow | null = null;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -131,8 +138,9 @@ export default class ObsidianTelegramPlugin extends Plugin {
     const session = await signIn(email, password);
     this.settings.email = session.user.email ?? email;
     await this.saveSettings();
+    await this.syncUserPreferencesFromServer();
     await this.startSync();
-    this.statusIndicator?.setConnected();
+    this.updateStatusIndicator();
   }
 
   async sendEmailCode(email: string): Promise<void> {
@@ -159,8 +167,9 @@ export default class ObsidianTelegramPlugin extends Plugin {
     const session = await completeEmailOtp(codeOrUrl, this.settings.email);
     this.settings.email = session.user.email ?? this.settings.email;
     await this.saveSettings();
+    await this.syncUserPreferencesFromServer();
     await this.startSync();
-    this.statusIndicator?.setConnected();
+    this.updateStatusIndicator();
   }
 
   async logout(): Promise<void> {
@@ -172,6 +181,8 @@ export default class ObsidianTelegramPlugin extends Plugin {
     await signOut();
     this.syncEngine?.stop();
     this.syncEngine = null;
+    this.latestUsageEstimate = null;
+    this.latestUserPreferences = null;
     this.statusIndicator?.setDisconnected();
   }
 
@@ -236,6 +247,102 @@ export default class ObsidianTelegramPlugin extends Plugin {
     return Boolean(getSession());
   }
 
+  getLatestUsageEstimate(): UsageEstimateRow | null {
+    return this.latestUsageEstimate;
+  }
+
+  getLatestUserPreferences(): UserPreferencesRow | null {
+    return this.latestUserPreferences;
+  }
+
+  async refreshUsageEstimate(): Promise<UsageEstimateRow | null> {
+    if (!getSession()) {
+      this.latestUsageEstimate = null;
+      this.updateStatusIndicator();
+      return null;
+    }
+
+    const { data, error } = await getClient().rpc("get_usage_estimate");
+    if (error) {
+      throw new Error(`Failed to load usage estimate: ${error.message}`);
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    this.latestUsageEstimate = (row ?? null) as UsageEstimateRow | null;
+    this.updateStatusIndicator();
+    return this.latestUsageEstimate;
+  }
+
+  async syncUserPreferencesFromServer(): Promise<UserPreferencesRow | null> {
+    if (!getSession()) {
+      this.latestUserPreferences = null;
+      return null;
+    }
+
+    const { data, error } = await getClient()
+      .from("user_preferences")
+      .select("*")
+      .eq("user_id", getSession()!.user.id)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to load usage settings: ${error.message}`);
+    }
+
+    if (!data) {
+      return await this.pushUserPreferencesToServer();
+    }
+
+    this.latestUserPreferences = data as UserPreferencesRow;
+    this.settings.estimated_storage_limit_mb = Math.max(
+      1,
+      Math.round(this.latestUserPreferences.estimated_storage_limit_bytes / (1024 * 1024)),
+    );
+    this.settings.warning_threshold_percent = this.latestUserPreferences.warning_threshold_percent;
+    this.settings.telegram_warnings_enabled = this.latestUserPreferences.telegram_warnings_enabled;
+    await this.saveSettings();
+    return this.latestUserPreferences;
+  }
+
+  async pushUserPreferencesToServer(): Promise<UserPreferencesRow | null> {
+    const session = getSession();
+    if (!session) {
+      return null;
+    }
+
+    const payload = {
+      user_id: session.user.id,
+      estimated_storage_limit_bytes: Math.max(
+        1,
+        Math.round(this.settings.estimated_storage_limit_mb * 1024 * 1024),
+      ),
+      warning_threshold_percent: Math.min(100, Math.max(1, Math.round(this.settings.warning_threshold_percent))),
+      telegram_warnings_enabled: this.settings.telegram_warnings_enabled,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await getClient()
+      .from("user_preferences")
+      .upsert(payload)
+      .select("*")
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to save usage settings: ${error.message}`);
+    }
+
+    this.latestUserPreferences = data as UserPreferencesRow;
+    this.settings.estimated_storage_limit_mb = Math.max(
+      1,
+      Math.round(this.latestUserPreferences.estimated_storage_limit_bytes / (1024 * 1024)),
+    );
+    this.settings.warning_threshold_percent = this.latestUserPreferences.warning_threshold_percent;
+    this.settings.telegram_warnings_enabled = this.latestUserPreferences.telegram_warnings_enabled;
+    await this.saveSettings();
+    this.updateStatusIndicator();
+    return this.latestUserPreferences;
+  }
+
   private async initializeSupabaseFromSettings(): Promise<void> {
     try {
       initSupabase(this.settings.supabase_url, this.settings.supabase_anon_key);
@@ -248,8 +355,10 @@ export default class ObsidianTelegramPlugin extends Plugin {
 
       this.settings.email = session.user.email ?? this.settings.email;
       await this.saveSettings();
+      await this.syncUserPreferencesFromServer();
+      await this.refreshUsageEstimate();
       await this.startSync();
-      this.statusIndicator?.setConnected();
+      this.updateStatusIndicator();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.statusIndicator?.setError(message);
@@ -277,6 +386,8 @@ export default class ObsidianTelegramPlugin extends Plugin {
     });
 
     await this.syncEngine.start();
+    await this.refreshUsageEstimate();
+    this.updateStatusIndicator();
   }
 
   private async processMessages(messages: MessageRow[]): Promise<void> {
@@ -287,6 +398,9 @@ export default class ObsidianTelegramPlugin extends Plugin {
     }
 
     this.statusIndicator?.setConnected();
+    void this.refreshUsageEstimate().catch((error) => {
+      console.error("Failed to refresh usage estimate after sync:", error);
+    });
   }
 
   private async processMessage(message: MessageRow): Promise<void> {
@@ -361,5 +475,36 @@ export default class ObsidianTelegramPlugin extends Plugin {
       .filter((rule): rule is PluginSettings["distribution_rules"][number] => rule !== null);
 
     return normalized.length > 0 ? normalized : [createDefaultDistributionRule()];
+  }
+
+  private updateStatusIndicator(): void {
+    if (!this.statusIndicator) {
+      return;
+    }
+
+    if (!this.hasSession()) {
+      this.statusIndicator.setDisconnected();
+      return;
+    }
+
+    const estimate = this.latestUsageEstimate;
+    const limitBytes =
+      this.latestUserPreferences?.estimated_storage_limit_bytes ??
+      Math.round(this.settings.estimated_storage_limit_mb * 1024 * 1024);
+    const threshold =
+      this.latestUserPreferences?.warning_threshold_percent ?? this.settings.warning_threshold_percent;
+
+    if (!estimate || limitBytes <= 0) {
+      this.statusIndicator.setConnected();
+      return;
+    }
+
+    const usagePercent = Math.round((estimate.estimated_total_bytes / limitBytes) * 100);
+    if (usagePercent >= threshold) {
+      this.statusIndicator.setWarning(usagePercent);
+      return;
+    }
+
+    this.statusIndicator.setConnected(usagePercent);
   }
 }

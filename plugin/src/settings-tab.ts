@@ -20,6 +20,7 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
 
     containerEl.createEl("h2", { text: "Obsidian Telegram" });
     this.renderConnectionHeader(containerEl);
+    this.renderUsageSection(containerEl);
 
     new Setting(containerEl)
       .setName("Supabase URL")
@@ -398,5 +399,211 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
     const body = row.createDiv({ cls: "obsidian-telegram-connection-body" });
     body.createEl("div", { cls: "obsidian-telegram-connection-value", text: value });
     body.createEl("div", { cls: "obsidian-telegram-connection-description", text: description });
+  }
+
+  private renderUsageSection(containerEl: HTMLElement): void {
+    const sectionEl = containerEl.createDiv({ cls: "obsidian-telegram-usage-section" });
+    sectionEl.createEl("h3", { text: "Storage Usage" });
+
+    const summaryEl = sectionEl.createDiv({ cls: "obsidian-telegram-usage-card" });
+    summaryEl.setText(
+      this.plugin.hasSession()
+        ? "Loading estimated storage usage..."
+        : "Sign in to load estimated storage usage and warning settings.",
+    );
+
+    const controlsEl = sectionEl.createDiv({ cls: "obsidian-telegram-usage-controls" });
+
+    new Setting(controlsEl)
+      .setName("Estimated storage limit (MB)")
+      .setDesc("Soft limit used for local estimates and warnings. Default is 1024 MB.")
+      .addText((text) =>
+        text.setValue(String(this.plugin.settings.estimated_storage_limit_mb)).onChange(async (value) => {
+          const parsed = Number.parseInt(value, 10);
+          if (!Number.isFinite(parsed) || parsed <= 0) {
+            return;
+          }
+
+          this.plugin.settings.estimated_storage_limit_mb = parsed;
+          await this.plugin.saveSettings();
+          if (this.plugin.hasSession()) {
+            await this.plugin.pushUserPreferencesToServer();
+            await this.populateUsageSection(summaryEl);
+          }
+        }),
+      );
+
+    new Setting(controlsEl)
+      .setName("Warning threshold (%)")
+      .setDesc("Send a warning once the estimated usage reaches this percentage of the soft limit.")
+      .addText((text) =>
+        text.setValue(String(this.plugin.settings.warning_threshold_percent)).onChange(async (value) => {
+          const parsed = Number.parseInt(value, 10);
+          if (!Number.isFinite(parsed) || parsed < 1 || parsed > 100) {
+            return;
+          }
+
+          this.plugin.settings.warning_threshold_percent = parsed;
+          await this.plugin.saveSettings();
+          if (this.plugin.hasSession()) {
+            await this.plugin.pushUserPreferencesToServer();
+            await this.populateUsageSection(summaryEl);
+          }
+        }),
+      );
+
+    new Setting(controlsEl)
+      .setName("Telegram warnings")
+      .setDesc("Send a warning through the connected Telegram bot when the threshold is crossed.")
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.telegram_warnings_enabled).onChange(async (value) => {
+          this.plugin.settings.telegram_warnings_enabled = value;
+          await this.plugin.saveSettings();
+          if (this.plugin.hasSession()) {
+            await this.plugin.pushUserPreferencesToServer();
+            await this.populateUsageSection(summaryEl);
+          }
+        }),
+      );
+
+    new Setting(controlsEl)
+      .setName("Usage status")
+      .setDesc("Refresh the estimate and current warning state.")
+      .addButton((button) =>
+        button.setButtonText("Refresh usage").onClick(async () => {
+          try {
+            await this.populateUsageSection(summaryEl);
+            new Notice("Usage estimate refreshed.");
+          } catch (error) {
+            new Notice(error instanceof Error ? error.message : String(error));
+          }
+        }),
+      );
+
+    if (this.plugin.hasSession()) {
+      void this.populateUsageSection(summaryEl).catch((error) => {
+        summaryEl.setText(error instanceof Error ? error.message : String(error));
+      });
+    }
+  }
+
+  private async populateUsageSection(summaryEl: HTMLElement): Promise<void> {
+    if (!this.plugin.hasSession()) {
+      summaryEl.setText("Sign in to load estimated storage usage and warning settings.");
+      return;
+    }
+
+    const [preferences, usage] = await Promise.all([
+      this.plugin.syncUserPreferencesFromServer(),
+      this.plugin.refreshUsageEstimate(),
+    ]);
+
+    const limitBytes =
+      preferences?.estimated_storage_limit_bytes ??
+      this.plugin.settings.estimated_storage_limit_mb * 1024 * 1024;
+    const usageBytes = usage?.estimated_total_bytes ?? 0;
+    const usagePercent = limitBytes > 0 ? Math.round((usageBytes / limitBytes) * 100) : 0;
+    const notificationStatus = preferences?.notification_chat_id
+      ? `Alerts will be sent to private chat ${preferences.notification_chat_id}.`
+      : "No private bot chat registered yet. Send your bot a direct message to enable Telegram alerts.";
+    const thresholdPercent =
+      preferences?.warning_threshold_percent ?? this.plugin.settings.warning_threshold_percent;
+    const databasePercent = usageBytes > 0 && usage ? Math.round((usage.estimated_database_bytes / usageBytes) * 100) : 0;
+    const filesPercent = usageBytes > 0 && usage ? Math.round((usage.estimated_file_bytes / usageBytes) * 100) : 0;
+
+    summaryEl.empty();
+
+    const headerEl = summaryEl.createDiv({ cls: "obsidian-telegram-usage-header" });
+    const headerCopyEl = headerEl.createDiv();
+    headerCopyEl.createEl("div", { cls: "obsidian-telegram-usage-eyebrow", text: "Estimated usage" });
+    headerCopyEl.createEl("div", {
+      cls: "obsidian-telegram-usage-title",
+      text:
+        usage === null
+          ? "No synced data yet"
+          : `${this.formatBytes(usageBytes)} of ${this.formatBytes(limitBytes)}`,
+    });
+    headerCopyEl.createEl("div", {
+      cls: "obsidian-telegram-usage-subtitle",
+      text:
+        usage === null
+          ? "The chart will appear after your first synced messages."
+          : `${usage.message_count} messages and ${usage.file_count} files tracked by the estimate.`,
+    });
+    headerEl.createEl("div", {
+      cls: "obsidian-telegram-usage-badge",
+      text: `${usagePercent}%`,
+    });
+
+    const chartEl = summaryEl.createDiv({ cls: "obsidian-telegram-usage-chart" });
+    const scaleEl = chartEl.createDiv({ cls: "obsidian-telegram-usage-scale" });
+    scaleEl.createSpan({ text: "0%" });
+    scaleEl.createSpan({ text: "100%" });
+
+    const trackEl = chartEl.createDiv({ cls: "obsidian-telegram-usage-track" });
+    const fillEl = trackEl.createDiv({ cls: "obsidian-telegram-usage-fill" });
+    fillEl.style.width = `${Math.min(100, Math.max(0, usagePercent))}%`;
+
+    const thresholdEl = trackEl.createDiv({ cls: "obsidian-telegram-usage-threshold" });
+    thresholdEl.style.left = `${Math.min(100, Math.max(0, thresholdPercent))}%`;
+    thresholdEl.setAttribute("aria-label", `Warning threshold ${thresholdPercent}%`);
+
+    const thresholdLabelEl = chartEl.createDiv({ cls: "obsidian-telegram-usage-threshold-label" });
+    thresholdLabelEl.setText(`Warning threshold ${thresholdPercent}%`);
+
+    const statsEl = summaryEl.createDiv({ cls: "obsidian-telegram-usage-stats" });
+    this.createUsageStat(statsEl, "Messages", usage ? String(usage.message_count) : "0");
+    this.createUsageStat(statsEl, "Files", usage ? String(usage.file_count) : "0");
+    this.createUsageStat(
+      statsEl,
+      "Database",
+      usage ? this.formatBytes(usage.estimated_database_bytes) : "0 B",
+      usage ? `${databasePercent}% of estimate` : undefined,
+    );
+    this.createUsageStat(
+      statsEl,
+      "Files",
+      usage ? this.formatBytes(usage.estimated_file_bytes) : "0 B",
+      usage ? `${filesPercent}% of estimate` : undefined,
+    );
+
+    const footerEl = summaryEl.createDiv({ cls: "obsidian-telegram-usage-footer" });
+    footerEl.createEl("div", {
+      cls: "obsidian-telegram-usage-note",
+      text: notificationStatus,
+    });
+    footerEl.createEl("div", {
+      cls: "obsidian-telegram-usage-note",
+      text: preferences?.telegram_warnings_enabled
+        ? "Telegram warnings are enabled."
+        : "Telegram warnings are disabled.",
+    });
+  }
+
+  private createUsageStat(containerEl: HTMLElement, label: string, value: string, meta?: string): void {
+    const statEl = containerEl.createDiv({ cls: "obsidian-telegram-usage-stat" });
+    statEl.createEl("div", { cls: "obsidian-telegram-usage-stat-label", text: label });
+    statEl.createEl("div", { cls: "obsidian-telegram-usage-stat-value", text: value });
+    if (meta) {
+      statEl.createEl("div", { cls: "obsidian-telegram-usage-stat-meta", text: meta });
+    }
+  }
+
+  private formatBytes(bytes: number): string {
+    if (!Number.isFinite(bytes) || bytes <= 0) {
+      return "0 B";
+    }
+
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    let value = bytes;
+    let unitIndex = 0;
+
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+
+    const rounded = value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1);
+    return `${rounded} ${units[unitIndex]}`;
   }
 }
