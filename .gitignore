@@ -7,3 +7,4 @@ plugin/main.js
 plugin/node_modules/
 plugin/coverage/
 supabase/.temp/
+testing/
