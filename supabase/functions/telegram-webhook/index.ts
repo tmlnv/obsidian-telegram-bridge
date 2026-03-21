@@ -5,6 +5,8 @@ const supabaseAdmin = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
 );
 
+const DEFAULT_SYNC_REACTION = { type: "emoji", emoji: "👾" } as const;
+
 interface TelegramUser {
   id: number;
   username?: string;
@@ -72,6 +74,36 @@ interface BotConnectionRow {
   bot_token_nonce: string | null;
 }
 
+interface TelegramApiResponse {
+  ok?: boolean;
+  description?: string;
+}
+
+interface ReactionTypeEmoji {
+  type: "emoji";
+  emoji: string;
+}
+
+interface ReactionTypeCustomEmoji {
+  type: "custom_emoji";
+  custom_emoji_id: string;
+}
+
+interface ReactionTypePaid {
+  type: "paid";
+}
+
+type ReactionType =
+  | ReactionTypeEmoji
+  | ReactionTypeCustomEmoji
+  | ReactionTypePaid;
+
+interface TelegramChatInfoResponse extends TelegramApiResponse {
+  result?: {
+    available_reactions?: ReactionType[];
+  };
+}
+
 function decodeBase64(value: string): Uint8Array {
   const binary = atob(value);
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
@@ -92,7 +124,10 @@ async function importEncryptionKey(): Promise<CryptoKey> {
   );
 }
 
-async function decryptBotToken(ciphertext: string, nonce: string): Promise<string> {
+async function decryptBotToken(
+  ciphertext: string,
+  nonce: string,
+): Promise<string> {
   const key = await importEncryptionKey();
   const decrypted = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: decodeBase64(nonce) },
@@ -124,7 +159,13 @@ function formatSenderName(user?: TelegramUser): string | null {
 }
 
 function resolveMessage(update: TelegramUpdate): TelegramMessage | null {
-  return update.message ?? update.edited_message ?? update.channel_post ?? update.edited_channel_post ?? null;
+  return (
+    update.message ??
+    update.edited_message ??
+    update.channel_post ??
+    update.edited_channel_post ??
+    null
+  );
 }
 
 function getTopicId(message: TelegramMessage): number | null {
@@ -161,7 +202,10 @@ async function upsertTopic(
   }
 }
 
-async function resolveTopicName(userId: string, message: TelegramMessage): Promise<string | null> {
+async function resolveTopicName(
+  userId: string,
+  message: TelegramMessage,
+): Promise<string | null> {
   const topicId = getTopicId(message);
   if (!topicId) {
     return null;
@@ -193,12 +237,16 @@ async function resolveTopicName(userId: string, message: TelegramMessage): Promi
   return data?.topic_name ?? null;
 }
 
-function getTelegramFile(message: TelegramMessage): TelegramFileDescriptor | null {
+function getTelegramFile(
+  message: TelegramMessage,
+): TelegramFileDescriptor | null {
   if (message.photo?.length) {
     return message.photo[message.photo.length - 1];
   }
 
-  return message.document ?? message.video ?? message.audio ?? message.voice ?? null;
+  return (
+    message.document ?? message.video ?? message.audio ?? message.voice ?? null
+  );
 }
 
 function isPrivateChat(message: TelegramMessage): boolean {
@@ -206,7 +254,12 @@ function isPrivateChat(message: TelegramMessage): boolean {
 }
 
 function isServiceOnlyMessage(message: TelegramMessage): boolean {
-  return !message.text && !message.caption && !getTelegramFile(message) && !message.media_group_id;
+  return (
+    !message.text &&
+    !message.caption &&
+    !getTelegramFile(message) &&
+    !message.media_group_id
+  );
 }
 
 function detectMessageType(message: TelegramMessage): string {
@@ -247,11 +300,14 @@ async function downloadTelegramFile(
   botToken: string,
   fileId: string,
 ): Promise<{ data: ArrayBuffer; filePath: string }> {
-  const metadataResponse = await fetch(`https://api.telegram.org/bot${botToken}/getFile`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ file_id: fileId }),
-  });
+  const metadataResponse = await fetch(
+    `https://api.telegram.org/bot${botToken}/getFile`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_id: fileId }),
+    },
+  );
   const metadata = await metadataResponse.json();
 
   if (!metadata.ok || !metadata.result?.file_path) {
@@ -259,7 +315,9 @@ async function downloadTelegramFile(
   }
 
   const filePath = metadata.result.file_path as string;
-  const fileResponse = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`);
+  const fileResponse = await fetch(
+    `https://api.telegram.org/file/bot${botToken}/${filePath}`,
+  );
 
   if (!fileResponse.ok) {
     throw new Error(`Failed to download Telegram file: ${fileResponse.status}`);
@@ -307,10 +365,12 @@ async function uploadTelegramFile(
   const downloaded = await downloadTelegramFile(botToken, file.file_id);
   const storagePath = `${userId}/${detectMessageType(message)}s/${message.chat.id}/${message.message_id}_${file.file_unique_id ?? "file"}${resolveFileExtension(file)}`;
 
-  const { error } = await supabaseAdmin.storage.from("telegram-files").upload(storagePath, downloaded.data, {
-    contentType: file.mime_type ?? undefined,
-    upsert: true,
-  });
+  const { error } = await supabaseAdmin.storage
+    .from("telegram-files")
+    .upload(storagePath, downloaded.data, {
+      contentType: file.mime_type ?? undefined,
+      upsert: true,
+    });
 
   if (error) {
     throw new Error(`Failed to upload Telegram file: ${error.message}`);
@@ -324,7 +384,10 @@ async function uploadTelegramFile(
   };
 }
 
-async function upsertNotificationChat(userId: string, chatId: number): Promise<void> {
+async function upsertNotificationChat(
+  userId: string,
+  chatId: number,
+): Promise<void> {
   const { error } = await supabaseAdmin.from("user_preferences").upsert({
     user_id: userId,
     notification_chat_id: chatId,
@@ -333,6 +396,73 @@ async function upsertNotificationChat(userId: string, chatId: number): Promise<v
 
   if (error) {
     throw new Error(`Failed to store notification chat: ${error.message}`);
+  }
+}
+
+async function resolveSyncReaction(
+  botToken: string,
+  chatId: number,
+): Promise<ReactionType | null> {
+  const response = await fetch(
+    `https://api.telegram.org/bot${botToken}/getChat`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId }),
+    },
+  );
+  const payload = (await response
+    .json()
+    .catch(() => null)) as TelegramChatInfoResponse | null;
+
+  if (!response.ok || !payload?.ok || !payload.result) {
+    throw new Error(
+      payload?.description ?? `Failed to load chat info: ${response.status}`,
+    );
+  }
+
+  const availableReactions = payload.result.available_reactions;
+  if (!availableReactions || availableReactions.length === 0) {
+    return DEFAULT_SYNC_REACTION;
+  }
+
+  const supportedReaction = availableReactions.find(
+    (reaction): reaction is ReactionTypeEmoji | ReactionTypeCustomEmoji =>
+      reaction.type === "emoji" || reaction.type === "custom_emoji",
+  );
+
+  return supportedReaction ?? null;
+}
+
+async function setSyncedReaction(
+  botToken: string,
+  message: TelegramMessage,
+): Promise<void> {
+  const reaction = await resolveSyncReaction(botToken, message.chat.id);
+  if (!reaction) {
+    return;
+  }
+
+  const response = await fetch(
+    `https://api.telegram.org/bot${botToken}/setMessageReaction`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: message.chat.id,
+        message_id: message.message_id,
+        reaction: [reaction],
+      }),
+    },
+  );
+  const payload = (await response
+    .json()
+    .catch(() => null)) as TelegramApiResponse | null;
+
+  if (!response.ok || !payload?.ok) {
+    throw new Error(
+      payload?.description ?? `Failed to set sync reaction: ${response.status}`,
+    );
   }
 }
 
@@ -350,13 +480,18 @@ Deno.serve(async (request: Request) => {
     .from("bot_connections")
     .select("user_id, webhook_secret, bot_token_ciphertext, bot_token_nonce")
     .eq("webhook_secret", secret)
-    .maybeSingle()) as { data: BotConnectionRow | null; error: { message: string } | null };
+    .maybeSingle()) as {
+    data: BotConnectionRow | null;
+    error: { message: string } | null;
+  };
 
   if (error || !botConnection) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const update = (await request.json().catch(() => null)) as TelegramUpdate | null;
+  const update = (await request
+    .json()
+    .catch(() => null)) as TelegramUpdate | null;
   if (!update) {
     return new Response(JSON.stringify({ error: "Invalid JSON payload" }), {
       status: 400,
@@ -366,10 +501,13 @@ Deno.serve(async (request: Request) => {
 
   const message = resolveMessage(update);
   if (!message) {
-    return new Response(JSON.stringify({ ok: true, skipped: "not_a_message_update" }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ ok: true, skipped: "not_a_message_update" }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 
   try {
@@ -389,58 +527,87 @@ Deno.serve(async (request: Request) => {
     const topicId = getTopicId(message);
     const topicName = await resolveTopicName(botConnection.user_id, message);
     const contentHash = await computeContentHash(update);
-    const isEdit = Boolean(update.edited_message || update.edited_channel_post || message.edit_date);
-    const uploadedFile = await uploadTelegramFile(botConnection.user_id, message, botToken);
+    const isEdit = Boolean(
+      update.edited_message || update.edited_channel_post || message.edit_date,
+    );
+    const uploadedFile = await uploadTelegramFile(
+      botConnection.user_id,
+      message,
+      botToken,
+    );
 
     if (topicId && topicName) {
-      await upsertTopic(botConnection.user_id, message.chat.id, topicId, topicName);
+      await upsertTopic(
+        botConnection.user_id,
+        message.chat.id,
+        topicId,
+        topicName,
+      );
     }
 
     if (!isServiceOnlyMessage(message)) {
-      const { error: upsertError } = await supabaseAdmin.from("messages").upsert(
-        {
-          user_id: botConnection.user_id,
-          telegram_update_id: update.update_id ?? null,
-          telegram_message_id: message.message_id,
-          telegram_chat_id: message.chat.id,
-          telegram_chat_title: message.chat.title ?? null,
-          telegram_date: toIso(message.date),
-          topic_id: topicId,
-          topic_name: topicName,
-          sender_name: formatSenderName(message.from),
-          sender_username: message.from?.username ?? null,
-          sender_id: message.from?.id ?? null,
-          message_type: detectMessageType(message),
-          text_content: message.text ?? null,
-          caption: message.caption ?? null,
-          entities: message.entities ?? null,
-          caption_entities: message.caption_entities ?? null,
-          forward_from_name: null,
-          forward_date: toIso(message.forward_date),
-          reply_to_message_id: message.reply_to_message?.message_id ?? null,
-          media_group_id: message.media_group_id ?? null,
-          file_path: uploadedFile.file_path,
-          file_name: uploadedFile.file_name,
-          file_size: uploadedFile.file_size,
-          file_mime_type: uploadedFile.file_mime_type,
-          is_edit: isEdit,
-          edit_date: toIso(message.edit_date),
-          content_hash: contentHash,
-          raw_update: update,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,telegram_chat_id,telegram_message_id" },
-      );
+      const { error: upsertError } = await supabaseAdmin
+        .from("messages")
+        .upsert(
+          {
+            user_id: botConnection.user_id,
+            telegram_update_id: update.update_id ?? null,
+            telegram_message_id: message.message_id,
+            telegram_chat_id: message.chat.id,
+            telegram_chat_title: message.chat.title ?? null,
+            telegram_date: toIso(message.date),
+            topic_id: topicId,
+            topic_name: topicName,
+            sender_name: formatSenderName(message.from),
+            sender_username: message.from?.username ?? null,
+            sender_id: message.from?.id ?? null,
+            message_type: detectMessageType(message),
+            text_content: message.text ?? null,
+            caption: message.caption ?? null,
+            entities: message.entities ?? null,
+            caption_entities: message.caption_entities ?? null,
+            forward_from_name: null,
+            forward_date: toIso(message.forward_date),
+            reply_to_message_id: message.reply_to_message?.message_id ?? null,
+            media_group_id: message.media_group_id ?? null,
+            file_path: uploadedFile.file_path,
+            file_name: uploadedFile.file_name,
+            file_size: uploadedFile.file_size,
+            file_mime_type: uploadedFile.file_mime_type,
+            is_edit: isEdit,
+            edit_date: toIso(message.edit_date),
+            content_hash: contentHash,
+            raw_update: update,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,telegram_chat_id,telegram_message_id" },
+        );
 
       if (upsertError) {
         throw new Error(`Failed to upsert message: ${upsertError.message}`);
+      }
+
+      try {
+        await setSyncedReaction(botToken, message);
+      } catch (reactionError) {
+        console.warn("telegram-webhook sync reaction failed", {
+          chat_id: message.chat.id,
+          message_id: message.message_id,
+          error:
+            reactionError instanceof Error
+              ? reactionError.message
+              : String(reactionError),
+        });
       }
     }
   } catch (caughtError) {
     console.error("telegram-webhook processing failed", caughtError);
     return new Response(
       JSON.stringify({
-        error: caughtError instanceof Error ? caughtError.message : String(caughtError),
+        error:
+          caughtError instanceof Error
+            ? caughtError.message
+            : String(caughtError),
       }),
       {
         status: 500,
