@@ -17,4 +17,7 @@ port = 54323
 verify_jwt = false
 
 [functions.setup-bot]
-verify_jwt = true
+verify_jwt = false
+
+[functions.usage-warning-check]
+verify_jwt = false
