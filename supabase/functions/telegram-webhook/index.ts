@@ -368,7 +368,7 @@ async function uploadTelegramFile(
   const { error } = await supabaseAdmin.storage
     .from("telegram-files")
     .upload(storagePath, downloaded.data, {
-      contentType: file.mime_type ?? undefined,
+      contentType: file.mime_type || "application/octet-stream",
       upsert: true,
     });
 
