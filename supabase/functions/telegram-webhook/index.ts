@@ -7,6 +7,8 @@ const supabaseAdmin = createClient(
 
 const DEFAULT_SYNC_REACTION = { type: "emoji", emoji: "👾" } as const;
 
+const MAX_TELEGRAM_DOWNLOAD_BYTES = 20 * 1024 * 1024;
+
 interface TelegramUser {
   id: number;
   username?: string;
@@ -362,7 +364,44 @@ async function uploadTelegramFile(
     };
   }
 
-  const downloaded = await downloadTelegramFile(botToken, file.file_id);
+  if (file.file_size && file.file_size > MAX_TELEGRAM_DOWNLOAD_BYTES) {
+    console.warn("telegram-webhook skipping oversized file", {
+      chat_id: message.chat.id,
+      message_id: message.message_id,
+      file_size: file.file_size,
+      limit: MAX_TELEGRAM_DOWNLOAD_BYTES,
+    });
+    return {
+      file_path: null,
+      file_name: file.file_name ?? null,
+      file_size: file.file_size ?? null,
+      file_mime_type: file.mime_type ?? null,
+    };
+  }
+
+  let downloaded: { data: ArrayBuffer; filePath: string };
+  try {
+    downloaded = await downloadTelegramFile(botToken, file.file_id);
+  } catch (downloadError) {
+    const messageText =
+      downloadError instanceof Error
+        ? downloadError.message
+        : String(downloadError);
+    if (messageText.toLowerCase().includes("file is too big")) {
+      console.warn("telegram-webhook file too big for Bot API", {
+        chat_id: message.chat.id,
+        message_id: message.message_id,
+        file_size: file.file_size,
+      });
+      return {
+        file_path: null,
+        file_name: file.file_name ?? null,
+        file_size: file.file_size ?? null,
+        file_mime_type: file.mime_type ?? null,
+      };
+    }
+    throw downloadError;
+  }
   const storagePath = `${userId}/${detectMessageType(message)}s/${message.chat.id}/${message.message_id}_${file.file_unique_id ?? "file"}${resolveFileExtension(file)}`;
 
   const { error } = await supabaseAdmin.storage
@@ -604,13 +643,14 @@ Deno.serve(async (request: Request) => {
     console.error("telegram-webhook processing failed", caughtError);
     return new Response(
       JSON.stringify({
+        ok: false,
         error:
           caughtError instanceof Error
             ? caughtError.message
             : String(caughtError),
       }),
       {
-        status: 500,
+        status: 200,
         headers: { "Content-Type": "application/json" },
       },
     );
