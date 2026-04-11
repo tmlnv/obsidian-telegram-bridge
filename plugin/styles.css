@@ -43,8 +43,11 @@
 
 .obsidian-telegram-connection-description {
   color: var(--text-muted);
-  font-size: 0.9rem;
-  word-break: break-all;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .obsidian-telegram-usage-section {
@@ -193,4 +196,94 @@
   .obsidian-telegram-usage-badge {
     min-width: 0;
   }
+}
+
+.obsidian-telegram-section {
+  margin: 10px 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px;
+  background: var(--background-secondary);
+  overflow: hidden;
+}
+
+.obsidian-telegram-section[open] {
+  background: var(--background-primary);
+}
+
+.obsidian-telegram-section-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 12px 16px;
+  font-weight: 600;
+  color: var(--text-normal);
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.obsidian-telegram-section-summary::-webkit-details-marker {
+  display: none;
+}
+
+.obsidian-telegram-section-summary::before {
+  content: "▸";
+  color: var(--text-muted);
+  font-size: 0.8em;
+  transition: transform 120ms ease;
+}
+
+.obsidian-telegram-section[open] > .obsidian-telegram-section-summary::before {
+  transform: rotate(90deg);
+}
+
+.obsidian-telegram-section-body {
+  padding: 4px 16px 12px;
+}
+
+.obsidian-telegram-section-body .setting-item:first-child {
+  border-top: 0;
+}
+
+.obsidian-telegram-section-note {
+  border-top: 0 !important;
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+}
+
+.obsidian-telegram-section-note .setting-item-control {
+  display: none;
+}
+
+.obsidian-telegram-section-note .setting-item-info {
+  margin-right: 0;
+}
+
+@keyframes obsidian-telegram-skeleton-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 0.25; }
+}
+
+.obsidian-telegram-usage-card.is-loading .obsidian-telegram-skeleton-text,
+.obsidian-telegram-usage-card.is-loading .obsidian-telegram-skeleton-badge,
+.obsidian-telegram-usage-card.is-loading .obsidian-telegram-skeleton-fill,
+.obsidian-telegram-usage-card.is-loading .obsidian-telegram-usage-stat-value,
+.obsidian-telegram-usage-card.is-loading .obsidian-telegram-usage-stat-meta {
+  color: transparent;
+  background: var(--background-modifier-border);
+  border-radius: 6px;
+  animation: obsidian-telegram-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.obsidian-telegram-usage-card.is-loading .obsidian-telegram-skeleton-fill {
+  width: 35%;
+}
+
+.obsidian-telegram-usage-card.is-loading .obsidian-telegram-usage-stat-value {
+  min-height: 1.1rem;
+}
+
+.obsidian-telegram-usage-card.is-loading .obsidian-telegram-usage-stat-meta {
+  min-height: 0.9rem;
+  margin-top: 4px;
 }

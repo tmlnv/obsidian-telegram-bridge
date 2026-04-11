@@ -4,6 +4,7 @@ import { createDefaultDistributionRule } from "./types";
 
 export class ObsidianTelegramSettingTab extends PluginSettingTab {
   plugin: ObsidianTelegramPlugin;
+  private is_reconfiguring_bot = false;
 
   constructor(plugin: ObsidianTelegramPlugin) {
     super(plugin.app, plugin);
@@ -13,16 +14,47 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    let emailValue = this.plugin.settings.email;
-    let passwordValue = "";
-    let emailCodeValue = "";
-    let botTokenValue = "";
 
     containerEl.createEl("h2", { text: "Obsidian Telegram" });
     this.renderConnectionHeader(containerEl);
-    this.renderUsageSection(containerEl);
+    this.renderUsageCard(containerEl);
 
-    new Setting(containerEl)
+    this.renderSupabaseSection(containerEl);
+    this.renderAccountSection(containerEl);
+    this.renderTelegramBotSection(containerEl);
+    this.renderRoutingSection(containerEl);
+    this.renderSyncBehaviorSection(containerEl);
+    this.renderStorageWarningsSection(containerEl);
+    this.renderAdvancedSection(containerEl);
+  }
+
+  private createSection(
+    containerEl: HTMLElement,
+    title: string,
+    options: { is_open?: boolean } = {},
+  ): HTMLElement {
+    const details = containerEl.createEl("details", {
+      cls: "obsidian-telegram-section",
+    });
+    if (options.is_open) {
+      details.setAttr("open", "");
+    }
+    const summary = details.createEl("summary", {
+      cls: "obsidian-telegram-section-summary",
+    });
+    summary.createEl("span", {
+      cls: "obsidian-telegram-section-title",
+      text: title,
+    });
+    return details.createDiv({ cls: "obsidian-telegram-section-body" });
+  }
+
+  private renderSupabaseSection(containerEl: HTMLElement): void {
+    const body = this.createSection(containerEl, "Supabase connection", {
+      is_open: !this.plugin.isSupabaseConfigured(),
+    });
+
+    new Setting(body)
       .setName("Supabase URL")
       .setDesc("Supabase project URL used by the plugin.")
       .addText((text) =>
@@ -35,7 +67,7 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
           }),
       );
 
-    new Setting(containerEl)
+    new Setting(body)
       .setName("Supabase anon key")
       .setDesc("Public anon key for the Supabase project.")
       .addTextArea((text) =>
@@ -48,7 +80,7 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
           }),
       );
 
-    new Setting(containerEl)
+    new Setting(body)
       .setName("Connection")
       .setDesc("Reconnect the plugin after changing Supabase settings.")
       .addButton((button) =>
@@ -62,8 +94,198 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
           }
         }),
       );
+  }
 
-    new Setting(containerEl)
+  private renderAccountSection(containerEl: HTMLElement): void {
+    const is_signed_in = this.plugin.hasSession();
+    const body = this.createSection(containerEl, "Account", {
+      is_open: !is_signed_in,
+    });
+
+    if (is_signed_in) {
+      new Setting(body)
+        .setName("Session")
+        .setDesc(
+          `Signed in as ${this.plugin.getSessionEmail() || this.plugin.settings.email}`,
+        )
+        .addButton((button) =>
+          button.setButtonText("Sign out").onClick(async () => {
+            try {
+              await this.plugin.logout();
+              new Notice("Signed out.");
+              this.display();
+            } catch (error) {
+              new Notice(error instanceof Error ? error.message : String(error));
+            }
+          }),
+        )
+        .addButton((button) =>
+          button.setButtonText("Sync now").onClick(async () => {
+            try {
+              await this.plugin.manualSync();
+              new Notice("Sync completed.");
+            } catch (error) {
+              new Notice(error instanceof Error ? error.message : String(error));
+            }
+          }),
+        );
+      return;
+    }
+
+    let emailValue = this.plugin.settings.email;
+    let passwordValue = "";
+    let emailCodeValue = "";
+
+    new Setting(body)
+      .setName("Email")
+      .setDesc("Supabase account email for this plugin.")
+      .addText((text) =>
+        text
+          .setPlaceholder("you@example.com")
+          .setValue(emailValue)
+          .onChange((value) => {
+            emailValue = value.trim();
+          }),
+      );
+
+    new Setting(body)
+      .setName("Password")
+      .setDesc("Optional fallback for direct password sign-in.")
+      .addText((text) => {
+        text.inputEl.type = "password";
+        text.setPlaceholder("Password").onChange((value) => {
+          passwordValue = value;
+        });
+      });
+
+    new Setting(body)
+      .setName("Email code")
+      .setDesc("Request a passwordless sign-in code by email.")
+      .addButton((button) =>
+        button.setButtonText("Send email code").setCta().onClick(async () => {
+          try {
+            await this.plugin.sendEmailCode(emailValue);
+            new Notice("Email code sent. Paste the code or email URL below to complete sign-in.");
+            this.display();
+          } catch (error) {
+            new Notice(error instanceof Error ? error.message : String(error));
+          }
+        }),
+      );
+
+    new Setting(body)
+      .setName("Email code or URL")
+      .setDesc("Paste the OTP code from the email, or paste the full email URL.")
+      .addTextArea((text) =>
+        text.setPlaceholder("123456 or https://...token=...").onChange((value) => {
+          emailCodeValue = value.trim();
+        }),
+      )
+      .addButton((button) =>
+        button.setButtonText("Complete email sign-in").onClick(async () => {
+          try {
+            await this.plugin.completeEmailCodeSignIn(emailCodeValue);
+            new Notice("Signed in with email code.");
+            this.display();
+          } catch (error) {
+            new Notice(error instanceof Error ? error.message : String(error));
+          }
+        }),
+      );
+
+    new Setting(body)
+      .setName("Password sign-in")
+      .setDesc("Sign in with the email and password above.")
+      .addButton((button) =>
+        button.setButtonText("Sign in").setCta().onClick(async () => {
+          try {
+            await this.plugin.authenticate(emailValue, passwordValue);
+            new Notice("Signed in to Supabase.");
+            this.display();
+          } catch (error) {
+            new Notice(error instanceof Error ? error.message : String(error));
+          }
+        }),
+      );
+  }
+
+  private renderTelegramBotSection(containerEl: HTMLElement): void {
+    const is_signed_in = this.plugin.hasSession();
+    const connected_username = this.plugin.settings.connected_bot_username;
+    const show_token_form = !connected_username || this.is_reconfiguring_bot;
+
+    const body = this.createSection(containerEl, "Telegram bot", {
+      is_open: is_signed_in && (!connected_username || this.is_reconfiguring_bot),
+    });
+
+    new Setting(body)
+      .setDesc(
+        "Telegram Bot API caps file downloads at 20 MB. Larger files (big videos, documents) are recorded as message metadata only — the file bytes are not pulled into Supabase storage or your vault.",
+      )
+      .setClass("obsidian-telegram-section-note");
+
+    if (!is_signed_in) {
+      new Setting(body)
+        .setDesc("Sign in from the Account section first to connect a Telegram bot.")
+        .setClass("obsidian-telegram-section-note");
+      return;
+    }
+
+    if (connected_username && !this.is_reconfiguring_bot) {
+      new Setting(body)
+        .setName("Connected bot")
+        .setDesc(`Connected as @${connected_username}.`)
+        .addButton((button) =>
+          button.setButtonText("Reconfigure bot").onClick(() => {
+            this.is_reconfiguring_bot = true;
+            this.display();
+          }),
+        );
+      return;
+    }
+
+    let botTokenValue = "";
+
+    new Setting(body)
+      .setName("Bot token")
+      .setDesc("Token from BotFather. Sent to the setup function and not stored in plugin settings.")
+      .addText((text) => {
+        text.inputEl.type = "password";
+        text.setPlaceholder("123456:ABC-DEF...").onChange((value) => {
+          botTokenValue = value.trim();
+        });
+      })
+      .addButton((button) =>
+        button.setButtonText("Setup bot").setCta().onClick(async () => {
+          try {
+            const result = await this.plugin.setupBot(botTokenValue);
+            const webhookSuffix = result.webhook_url ? ` Webhook: ${result.webhook_url}` : "";
+            new Notice(`Connected @${result.bot_username}.${webhookSuffix}`);
+            this.is_reconfiguring_bot = false;
+            this.display();
+          } catch (error) {
+            new Notice(error instanceof Error ? error.message : String(error));
+          }
+        }),
+      );
+
+    if (show_token_form && connected_username) {
+      new Setting(body)
+        .setName("Cancel reconfigure")
+        .setDesc(`Keep the existing connection to @${connected_username}.`)
+        .addButton((button) =>
+          button.setButtonText("Cancel").onClick(() => {
+            this.is_reconfiguring_bot = false;
+            this.display();
+          }),
+        );
+    }
+  }
+
+  private renderRoutingSection(containerEl: HTMLElement): void {
+    const body = this.createSection(containerEl, "Routing", { is_open: false });
+
+    new Setting(body)
       .setName("Default note folder")
       .setDesc("Base folder used when writing synced Telegram messages.")
       .addText((text) =>
@@ -76,19 +298,19 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
           }),
       );
 
-    containerEl.createEl("h3", { text: "Routing Rules" });
-    containerEl.createEl("p", {
-      text: "Rules are checked top to bottom. Keep a final {{all}} fallback rule.",
-    });
+    new Setting(body)
+      .setName("Routing rules")
+      .setDesc("Rules are checked top to bottom. Keep a final {{all}} fallback rule.")
+      .setHeading();
 
     this.plugin.settings.distribution_rules.forEach((rule, index) => {
       const isFallbackRule = rule.filter_query.trim() === "{{all}}";
-      const ruleHeader = containerEl.createDiv({ cls: "obsidian-telegram-rule" });
+      const ruleHeader = body.createDiv({ cls: "obsidian-telegram-rule" });
       ruleHeader.createEl("h4", {
         text: isFallbackRule ? `Rule ${index + 1} (fallback)` : `Rule ${index + 1}`,
       });
 
-      new Setting(containerEl)
+      new Setting(body)
         .setName("Filter query")
         .setDesc("Examples: {{topic=Roadmap}}, {{chat=Ideas}}, {{all}}")
         .addText((text) =>
@@ -102,7 +324,7 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
             }),
         );
 
-      new Setting(containerEl)
+      new Setting(body)
         .setName("Note path template")
         .setDesc("Path template used when this rule matches.")
         .addText((text) =>
@@ -117,7 +339,7 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
             }),
         );
 
-      new Setting(containerEl)
+      new Setting(body)
         .setName("File path template")
         .setDesc("Path template used for synced files when this rule matches.")
         .addText((text) =>
@@ -132,7 +354,7 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
             }),
         );
 
-      new Setting(containerEl)
+      new Setting(body)
         .setName("Message template")
         .setDesc("Template used to render the note block for this rule.")
         .addTextArea((text) =>
@@ -161,7 +383,7 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
         );
     });
 
-    new Setting(containerEl)
+    new Setting(body)
       .setName("Rules")
       .setDesc("Add a new routing rule above the fallback rule.")
       .addButton((button) =>
@@ -177,132 +399,12 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
           this.display();
         }),
       );
+  }
 
-    containerEl.createEl("h3", { text: "Authentication" });
+  private renderSyncBehaviorSection(containerEl: HTMLElement): void {
+    const body = this.createSection(containerEl, "Sync behavior", { is_open: false });
 
-    new Setting(containerEl)
-      .setName("Email")
-      .setDesc("Supabase account email for this plugin.")
-      .addText((text) =>
-        text
-          .setPlaceholder("you@example.com")
-          .setValue(emailValue)
-          .onChange((value) => {
-            emailValue = value.trim();
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("Password")
-      .setDesc("Optional fallback for direct password sign-in.")
-      .addText((text) => {
-        text.inputEl.type = "password";
-        text.setPlaceholder("Password").onChange((value) => {
-          passwordValue = value;
-        });
-      });
-
-    new Setting(containerEl)
-      .setName("Email code")
-      .setDesc("Request a passwordless sign-in code by email.")
-      .addButton((button) =>
-        button.setButtonText("Send email code").setCta().onClick(async () => {
-          try {
-            await this.plugin.sendEmailCode(emailValue);
-            new Notice("Email code sent. Paste the code or email URL below to complete sign-in.");
-            this.display();
-          } catch (error) {
-            new Notice(error instanceof Error ? error.message : String(error));
-          }
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName("Email code or URL")
-      .setDesc("Paste the OTP code from the email, or paste the full email URL.")
-      .addTextArea((text) =>
-        text.setPlaceholder("123456 or https://...token=...").onChange((value) => {
-          emailCodeValue = value.trim();
-        }),
-      )
-      .addButton((button) =>
-        button.setButtonText("Complete email sign-in").onClick(async () => {
-          try {
-            await this.plugin.completeEmailCodeSignIn(emailCodeValue);
-            new Notice("Signed in with email code.");
-            this.display();
-          } catch (error) {
-            new Notice(error instanceof Error ? error.message : String(error));
-          }
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName("Session")
-      .setDesc(
-        this.plugin.hasSession()
-          ? `Signed in as ${this.plugin.getSessionEmail() || this.plugin.settings.email}`
-          : "No active Supabase session.",
-      )
-      .addButton((button) =>
-        button.setButtonText("Sign in").setCta().onClick(async () => {
-          try {
-            await this.plugin.authenticate(emailValue, passwordValue);
-            new Notice("Signed in to Supabase.");
-            this.display();
-          } catch (error) {
-            new Notice(error instanceof Error ? error.message : String(error));
-          }
-        }),
-      )
-      .addButton((button) =>
-        button.setButtonText("Sign out").onClick(async () => {
-          try {
-            await this.plugin.logout();
-            new Notice("Signed out.");
-            this.display();
-          } catch (error) {
-            new Notice(error instanceof Error ? error.message : String(error));
-          }
-        }),
-      )
-      .addButton((button) =>
-        button.setButtonText("Sync now").onClick(async () => {
-          try {
-            await this.plugin.manualSync();
-            new Notice("Sync completed.");
-          } catch (error) {
-            new Notice(error instanceof Error ? error.message : String(error));
-          }
-        }),
-      );
-
-    if (this.plugin.hasSession()) {
-      containerEl.createEl("h3", { text: "Telegram Bot" });
-
-      new Setting(containerEl)
-        .setName("Bot token")
-        .setDesc("Token from BotFather. Sent to the setup function and not stored in plugin settings.")
-        .addText((text) => {
-          text.inputEl.type = "password";
-          text.setPlaceholder("123456:ABC-DEF...").onChange((value) => {
-            botTokenValue = value.trim();
-          });
-        })
-        .addButton((button) =>
-          button.setButtonText("Setup bot").setCta().onClick(async () => {
-            try {
-              const result = await this.plugin.setupBot(botTokenValue);
-              const webhookSuffix = result.webhook_url ? ` Webhook: ${result.webhook_url}` : "";
-              new Notice(`Connected @${result.bot_username}.${webhookSuffix}`);
-            } catch (error) {
-              new Notice(error instanceof Error ? error.message : String(error));
-            }
-          }),
-        );
-    }
-
-    new Setting(containerEl)
+    new Setting(body)
       .setName("Poll interval")
       .setDesc("How often the plugin checks for new messages.")
       .addText((text) =>
@@ -318,7 +420,7 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
         }),
       );
 
-    new Setting(containerEl)
+    new Setting(body)
       .setName("Realtime")
       .setDesc("Use Supabase Realtime to trigger early polls.")
       .addToggle((toggle) =>
@@ -330,8 +432,82 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
           }
         }),
       );
+  }
 
-    new Setting(containerEl)
+  private renderStorageWarningsSection(containerEl: HTMLElement): void {
+    const body = this.createSection(containerEl, "Storage warnings", { is_open: false });
+
+    new Setting(body)
+      .setName("Estimated storage limit (MB)")
+      .setDesc("Soft limit used for local estimates and warnings. Default is 1024 MB.")
+      .addText((text) =>
+        text.setValue(String(this.plugin.settings.estimated_storage_limit_mb)).onChange(async (value) => {
+          const parsed = Number.parseInt(value, 10);
+          if (!Number.isFinite(parsed) || parsed <= 0) {
+            return;
+          }
+
+          this.plugin.settings.estimated_storage_limit_mb = parsed;
+          await this.plugin.saveSettings();
+          if (this.plugin.hasSession()) {
+            await this.plugin.pushUserPreferencesToServer();
+            await this.refreshUsageCard();
+          }
+        }),
+      );
+
+    new Setting(body)
+      .setName("Warning threshold (%)")
+      .setDesc("Send a warning once the estimated usage reaches this percentage of the soft limit.")
+      .addText((text) =>
+        text.setValue(String(this.plugin.settings.warning_threshold_percent)).onChange(async (value) => {
+          const parsed = Number.parseInt(value, 10);
+          if (!Number.isFinite(parsed) || parsed < 1 || parsed > 100) {
+            return;
+          }
+
+          this.plugin.settings.warning_threshold_percent = parsed;
+          await this.plugin.saveSettings();
+          if (this.plugin.hasSession()) {
+            await this.plugin.pushUserPreferencesToServer();
+            await this.refreshUsageCard();
+          }
+        }),
+      );
+
+    new Setting(body)
+      .setName("Telegram warnings")
+      .setDesc("Send a warning through the connected Telegram bot when the threshold is crossed.")
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.telegram_warnings_enabled).onChange(async (value) => {
+          this.plugin.settings.telegram_warnings_enabled = value;
+          await this.plugin.saveSettings();
+          if (this.plugin.hasSession()) {
+            await this.plugin.pushUserPreferencesToServer();
+            await this.refreshUsageCard();
+          }
+        }),
+      );
+
+    new Setting(body)
+      .setName("Usage status")
+      .setDesc("Refresh the estimate and current warning state.")
+      .addButton((button) =>
+        button.setButtonText("Refresh usage").onClick(async () => {
+          try {
+            await this.refreshUsageCard();
+            new Notice("Usage estimate refreshed.");
+          } catch (error) {
+            new Notice(error instanceof Error ? error.message : String(error));
+          }
+        }),
+      );
+  }
+
+  private renderAdvancedSection(containerEl: HTMLElement): void {
+    const body = this.createSection(containerEl, "Advanced", { is_open: false });
+
+    new Setting(body)
       .setName("Client ID")
       .setDesc("Stable identifier for this plugin installation.")
       .addText((text) => text.setValue(this.plugin.settings.client_id).setDisabled(true));
@@ -401,90 +577,79 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
     body.createEl("div", { cls: "obsidian-telegram-connection-description", text: description });
   }
 
-  private renderUsageSection(containerEl: HTMLElement): void {
+  private usageSummaryEl: HTMLElement | null = null;
+
+  private renderUsageCard(containerEl: HTMLElement): void {
     const sectionEl = containerEl.createDiv({ cls: "obsidian-telegram-usage-section" });
-    sectionEl.createEl("h3", { text: "Storage Usage" });
+    sectionEl.createEl("h3", { text: "Storage usage" });
 
     const summaryEl = sectionEl.createDiv({ cls: "obsidian-telegram-usage-card" });
-    summaryEl.setText(
-      this.plugin.hasSession()
-        ? "Loading estimated storage usage..."
-        : "Sign in to load estimated storage usage and warning settings.",
-    );
-
-    const controlsEl = sectionEl.createDiv({ cls: "obsidian-telegram-usage-controls" });
-
-    new Setting(controlsEl)
-      .setName("Estimated storage limit (MB)")
-      .setDesc("Soft limit used for local estimates and warnings. Default is 1024 MB.")
-      .addText((text) =>
-        text.setValue(String(this.plugin.settings.estimated_storage_limit_mb)).onChange(async (value) => {
-          const parsed = Number.parseInt(value, 10);
-          if (!Number.isFinite(parsed) || parsed <= 0) {
-            return;
-          }
-
-          this.plugin.settings.estimated_storage_limit_mb = parsed;
-          await this.plugin.saveSettings();
-          if (this.plugin.hasSession()) {
-            await this.plugin.pushUserPreferencesToServer();
-            await this.populateUsageSection(summaryEl);
-          }
-        }),
-      );
-
-    new Setting(controlsEl)
-      .setName("Warning threshold (%)")
-      .setDesc("Send a warning once the estimated usage reaches this percentage of the soft limit.")
-      .addText((text) =>
-        text.setValue(String(this.plugin.settings.warning_threshold_percent)).onChange(async (value) => {
-          const parsed = Number.parseInt(value, 10);
-          if (!Number.isFinite(parsed) || parsed < 1 || parsed > 100) {
-            return;
-          }
-
-          this.plugin.settings.warning_threshold_percent = parsed;
-          await this.plugin.saveSettings();
-          if (this.plugin.hasSession()) {
-            await this.plugin.pushUserPreferencesToServer();
-            await this.populateUsageSection(summaryEl);
-          }
-        }),
-      );
-
-    new Setting(controlsEl)
-      .setName("Telegram warnings")
-      .setDesc("Send a warning through the connected Telegram bot when the threshold is crossed.")
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.telegram_warnings_enabled).onChange(async (value) => {
-          this.plugin.settings.telegram_warnings_enabled = value;
-          await this.plugin.saveSettings();
-          if (this.plugin.hasSession()) {
-            await this.plugin.pushUserPreferencesToServer();
-            await this.populateUsageSection(summaryEl);
-          }
-        }),
-      );
-
-    new Setting(controlsEl)
-      .setName("Usage status")
-      .setDesc("Refresh the estimate and current warning state.")
-      .addButton((button) =>
-        button.setButtonText("Refresh usage").onClick(async () => {
-          try {
-            await this.populateUsageSection(summaryEl);
-            new Notice("Usage estimate refreshed.");
-          } catch (error) {
-            new Notice(error instanceof Error ? error.message : String(error));
-          }
-        }),
-      );
+    this.usageSummaryEl = summaryEl;
 
     if (this.plugin.hasSession()) {
+      this.renderUsageSkeleton(summaryEl);
       void this.populateUsageSection(summaryEl).catch((error) => {
+        summaryEl.empty();
         summaryEl.setText(error instanceof Error ? error.message : String(error));
       });
+    } else {
+      summaryEl.setText("Sign in to load estimated storage usage and warning settings.");
     }
+  }
+
+  private renderUsageSkeleton(summaryEl: HTMLElement): void {
+    summaryEl.empty();
+    summaryEl.addClass("is-loading");
+
+    const headerEl = summaryEl.createDiv({ cls: "obsidian-telegram-usage-header" });
+    const headerCopyEl = headerEl.createDiv();
+    headerCopyEl.createEl("div", { cls: "obsidian-telegram-usage-eyebrow", text: "Estimated usage" });
+    headerCopyEl.createEl("div", {
+      cls: "obsidian-telegram-usage-title obsidian-telegram-skeleton-text",
+      text: "—",
+    });
+    headerCopyEl.createEl("div", {
+      cls: "obsidian-telegram-usage-subtitle obsidian-telegram-skeleton-text",
+      text: "Loading estimated storage usage…",
+    });
+    headerEl.createEl("div", {
+      cls: "obsidian-telegram-usage-badge obsidian-telegram-skeleton-badge",
+      text: "—",
+    });
+
+    const chartEl = summaryEl.createDiv({ cls: "obsidian-telegram-usage-chart" });
+    const scaleEl = chartEl.createDiv({ cls: "obsidian-telegram-usage-scale" });
+    scaleEl.createSpan({ text: "0%" });
+    scaleEl.createSpan({ text: "100%" });
+    const trackEl = chartEl.createDiv({ cls: "obsidian-telegram-usage-track" });
+    trackEl.createDiv({ cls: "obsidian-telegram-usage-fill obsidian-telegram-skeleton-fill" });
+    chartEl.createDiv({
+      cls: "obsidian-telegram-usage-threshold-label obsidian-telegram-skeleton-text",
+      text: "Warning threshold —",
+    });
+
+    const statsEl = summaryEl.createDiv({ cls: "obsidian-telegram-usage-stats" });
+    this.createUsageStat(statsEl, "Messages", "—");
+    this.createUsageStat(statsEl, "Files", "—");
+    this.createUsageStat(statsEl, "Database", "—", "— of estimate");
+    this.createUsageStat(statsEl, "Files", "—", "— of estimate");
+
+    const footerEl = summaryEl.createDiv({ cls: "obsidian-telegram-usage-footer" });
+    footerEl.createEl("div", {
+      cls: "obsidian-telegram-usage-note obsidian-telegram-skeleton-text",
+      text: "Fetching notification status…",
+    });
+    footerEl.createEl("div", {
+      cls: "obsidian-telegram-usage-note obsidian-telegram-skeleton-text",
+      text: "Fetching warning state…",
+    });
+  }
+
+  private async refreshUsageCard(): Promise<void> {
+    if (!this.usageSummaryEl) {
+      return;
+    }
+    await this.populateUsageSection(this.usageSummaryEl);
   }
 
   private async populateUsageSection(summaryEl: HTMLElement): Promise<void> {
@@ -512,6 +677,7 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
     const filesPercent = usageBytes > 0 && usage ? Math.round((usage.estimated_file_bytes / usageBytes) * 100) : 0;
 
     summaryEl.empty();
+    summaryEl.removeClass("is-loading");
 
     const headerEl = summaryEl.createDiv({ cls: "obsidian-telegram-usage-header" });
     const headerCopyEl = headerEl.createDiv();

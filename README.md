@@ -311,6 +311,10 @@ Each Obsidian installation gets a unique `client_id` stored in the plugin's `dat
 
 Check that the `telegram-files` storage bucket exists in your Supabase project (created by the initial migration). If the Edge Function lacks permission to write to storage, check the service role key is correctly set in the function secrets.
 
+### Large files (videos, documents) are not downloaded
+
+The Telegram Bot API limits file downloads to **20 MB**. Anything larger cannot be pulled by the bot at all — this is a hard limit on Telegram's side, not a plugin setting. The `telegram-webhook` function detects oversized files, records the message with its file metadata (name, size, mime type) but `file_path` stays empty, and the webhook returns 200 so Telegram stops retrying. To bypass the 20 MB ceiling you would need a self-hosted [local Bot API server](https://github.com/tdlib/telegram-bot-api) (download limit ~2 GB) and point the bot at it instead of `api.telegram.org`.
+
 ---
 
 ## Repository layout
