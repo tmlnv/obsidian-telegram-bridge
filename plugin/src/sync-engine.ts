@@ -10,6 +10,7 @@ export interface SyncEngineOptions {
   vaultFingerprint: string;
   pollIntervalSeconds: number;
   isRealtimeEnabled: boolean;
+  registerInterval: (id: number) => number;
   onMessages: (messages: MessageRow[]) => Promise<void>;
   onError: (error: Error) => void;
 }
@@ -23,6 +24,7 @@ export class SyncEngine {
   private readonly onError: (error: Error) => void;
   private readonly pollIntervalSeconds: number;
   private readonly isRealtimeEnabled: boolean;
+  private readonly registerInterval: (id: number) => number;
   private pollIntervalId: number | null = null;
   private realtimeChannel: RealtimeChannel | null = null;
   private isPolling = false;
@@ -38,6 +40,7 @@ export class SyncEngine {
     this.vaultFingerprint = options.vaultFingerprint;
     this.pollIntervalSeconds = options.pollIntervalSeconds;
     this.isRealtimeEnabled = options.isRealtimeEnabled;
+    this.registerInterval = options.registerInterval;
     this.onMessages = options.onMessages;
     this.onError = options.onError;
   }
@@ -47,9 +50,11 @@ export class SyncEngine {
     await this.poll();
 
     this.stopPolling();
-    this.pollIntervalId = window.setInterval(() => {
-      void this.poll();
-    }, this.pollIntervalSeconds * 1000);
+    this.pollIntervalId = this.registerInterval(
+      window.setInterval(() => {
+        void this.poll();
+      }, this.pollIntervalSeconds * 1000),
+    );
 
     if (this.isRealtimeEnabled) {
       this.subscribeRealtime();

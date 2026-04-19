@@ -1,7 +1,7 @@
 {
-  "name": "obsidian-telegram-plugin",
+  "name": "telegram-bridge-plugin",
   "version": "0.1.0",
-  "description": "Telegram to Obsidian sync plugin backed by Supabase",
+  "description": "Telegram Bridge Obsidian plugin backed by Supabase",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",

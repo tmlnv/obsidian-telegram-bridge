@@ -15,7 +15,7 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Obsidian Telegram" });
+    this.renderIntro(containerEl);
     this.renderConnectionHeader(containerEl);
     this.renderUsageCard(containerEl);
 
@@ -26,6 +26,22 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
     this.renderSyncBehaviorSection(containerEl);
     this.renderStorageWarningsSection(containerEl);
     this.renderAdvancedSection(containerEl);
+  }
+
+  private renderIntro(containerEl: HTMLElement): void {
+    if (this.plugin.isSupabaseConfigured() && this.plugin.hasSession()) {
+      return;
+    }
+
+    const intro = containerEl.createDiv({ cls: "obsidian-telegram-intro" });
+    intro.createEl("div", {
+      cls: "obsidian-telegram-intro-title",
+      text: "Requires a self-hosted Supabase project",
+    });
+    intro.createEl("div", {
+      cls: "obsidian-telegram-intro-body",
+      text: "This plugin reads Telegram messages from your own Supabase backend. Follow the README to provision a free Supabase project, deploy the edge functions, and create a Telegram bot before connecting below.",
+    });
   }
 
   private createSection(
@@ -305,10 +321,9 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
 
     this.plugin.settings.distribution_rules.forEach((rule, index) => {
       const isFallbackRule = rule.filter_query.trim() === "{{all}}";
-      const ruleHeader = body.createDiv({ cls: "obsidian-telegram-rule" });
-      ruleHeader.createEl("h4", {
-        text: isFallbackRule ? `Rule ${index + 1} (fallback)` : `Rule ${index + 1}`,
-      });
+      new Setting(body)
+        .setName(isFallbackRule ? `Rule ${index + 1} (fallback)` : `Rule ${index + 1}`)
+        .setHeading();
 
       new Setting(body)
         .setName("Filter query")
@@ -581,7 +596,7 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
 
   private renderUsageCard(containerEl: HTMLElement): void {
     const sectionEl = containerEl.createDiv({ cls: "obsidian-telegram-usage-section" });
-    sectionEl.createEl("h3", { text: "Storage usage" });
+    new Setting(sectionEl).setName("Storage usage").setHeading();
 
     const summaryEl = sectionEl.createDiv({ cls: "obsidian-telegram-usage-card" });
     this.usageSummaryEl = summaryEl;
@@ -706,12 +721,15 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
     scaleEl.createSpan({ text: "0%" });
     scaleEl.createSpan({ text: "100%" });
 
+    const clampedUsagePercent = Math.min(100, Math.max(0, usagePercent));
+    const clampedThresholdPercent = Math.min(100, Math.max(0, thresholdPercent));
+
     const trackEl = chartEl.createDiv({ cls: "obsidian-telegram-usage-track" });
     const fillEl = trackEl.createDiv({ cls: "obsidian-telegram-usage-fill" });
-    fillEl.style.width = `${Math.min(100, Math.max(0, usagePercent))}%`;
+    fillEl.style.setProperty("--telegram-bridge-usage-percent", `${clampedUsagePercent}%`);
 
     const thresholdEl = trackEl.createDiv({ cls: "obsidian-telegram-usage-threshold" });
-    thresholdEl.style.left = `${Math.min(100, Math.max(0, thresholdPercent))}%`;
+    thresholdEl.style.setProperty("--telegram-bridge-threshold-percent", `${clampedThresholdPercent}%`);
     thresholdEl.setAttribute("aria-label", `Warning threshold ${thresholdPercent}%`);
 
     const thresholdLabelEl = chartEl.createDiv({ cls: "obsidian-telegram-usage-threshold-label" });

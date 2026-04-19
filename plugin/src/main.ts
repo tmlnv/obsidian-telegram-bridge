@@ -1,4 +1,4 @@
-import { Notice, Plugin } from "obsidian";
+import { Notice, Platform, Plugin } from "obsidian";
 import {
   createDefaultDistributionRule,
   DEFAULT_SETTINGS,
@@ -51,8 +51,10 @@ export default class ObsidianTelegramPlugin extends Plugin {
       await this.saveSettings();
     }
 
-    this.statusIndicator = new StatusIndicator(this);
-    this.statusIndicator.setIdle();
+    if (Platform.isDesktopApp) {
+      this.statusIndicator = new StatusIndicator(this);
+      this.statusIndicator.setIdle();
+    }
 
     this.addSettingTab(new ObsidianTelegramSettingTab(this));
 
@@ -62,18 +64,43 @@ export default class ObsidianTelegramPlugin extends Plugin {
 
     this.addCommand({
       id: "show-client-id",
-      name: "Show Obsidian Telegram client ID",
+      name: "Show client ID",
       callback: () => {
-        this.statusIndicator?.setConnected();
-        console.log("Obsidian Telegram client_id:", this.settings.client_id);
+        new Notice(`Client ID: ${this.settings.client_id}`);
       },
     });
 
     this.addCommand({
       id: "sync-now",
-      name: "Sync Telegram messages now",
+      name: "Sync now",
       callback: () => {
         void this.manualSync();
+      },
+    });
+
+    this.addCommand({
+      id: "reconnect",
+      name: "Reconnect",
+      callback: () => {
+        void this.reinitializeSupabase().catch((error) => {
+          new Notice(error instanceof Error ? error.message : String(error));
+        });
+      },
+    });
+
+    this.addCommand({
+      id: "sign-out",
+      name: "Sign out",
+      checkCallback: (checking) => {
+        if (!this.hasSession()) {
+          return false;
+        }
+        if (!checking) {
+          void this.logout().catch((error) => {
+            new Notice(error instanceof Error ? error.message : String(error));
+          });
+        }
+        return true;
       },
     });
   }
@@ -362,7 +389,7 @@ export default class ObsidianTelegramPlugin extends Plugin {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.statusIndicator?.setError(message);
-      new Notice(`Obsidian Telegram initialization failed: ${message}`);
+      new Notice(`Telegram Bridge initialization failed: ${message}`);
     }
   }
 
@@ -376,12 +403,13 @@ export default class ObsidianTelegramPlugin extends Plugin {
       vaultFingerprint: this.app.vault.getName(),
       pollIntervalSeconds: this.settings.poll_interval_seconds,
       isRealtimeEnabled: this.settings.is_realtime_enabled,
+      registerInterval: (id) => this.registerInterval(id),
       onMessages: async (messages) => {
         await this.processMessages(messages);
       },
       onError: (error) => {
         this.statusIndicator?.setError(error.message);
-        console.error("Obsidian Telegram sync failed:", error);
+        console.error("Telegram Bridge sync failed:", error);
       },
     });
 

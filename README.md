@@ -1,4 +1,4 @@
-# Obsidian Telegram Sync
+# Telegram Bridge for Obsidian
 
 Sync messages from a Telegram bot into your Obsidian vault. Messages arrive in real time, are stored in Supabase, and are pulled into your vault as Markdown notes — with support for files, forum topics, message edits, and flexible routing rules.
 
@@ -144,12 +144,12 @@ Until this plugin is published to the Obsidian community registry, install it ma
    ```
 2. Copy the output files into your vault's plugin folder:
    ```
-   <vault>/.obsidian/plugins/obsidian-telegram/
-   ├── main.js
-   ├── manifest.json
-   └── styles.css   (if present)
+   <vault>/.obsidian/plugins/telegram-bridge/
+   ├── main.js         (from plugin/main.js)
+   ├── manifest.json   (from repo root)
+   └── styles.css      (from plugin/styles.css)
    ```
-3. In Obsidian → **Settings → Community plugins**, enable **Obsidian Telegram Sync**.
+3. In Obsidian → **Settings → Community plugins**, enable **Telegram Bridge**.
 
 ### 3.2 Connect to Supabase
 
@@ -321,7 +321,11 @@ The Telegram Bot API limits file downloads to **20 MB**. Anything larger cannot 
 
 ```
 obsidian-telegram/
+├── manifest.json            Obsidian plugin manifest (release source of truth)
+├── versions.json            Plugin → min Obsidian app version map
 ├── plugin/                  Obsidian plugin (TypeScript + esbuild)
+│   ├── manifest.json        Local-dev mirror of the root manifest
+│   ├── styles.css           Plugin styles
 │   └── src/
 │       ├── main.ts          Plugin entry point
 │       ├── sync-engine.ts   Polling, cursor management, Realtime

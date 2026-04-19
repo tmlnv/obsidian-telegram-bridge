@@ -1,8 +1,8 @@
 {
-  "name": "obsidian-telegram",
+  "name": "telegram-bridge",
   "version": "0.1.0",
   "private": true,
-  "description": "Monorepo for the Obsidian Telegram plugin and Supabase backend",
+  "description": "Monorepo for the Telegram Bridge Obsidian plugin and Supabase backend",
   "scripts": {
     "verify": "node scripts/verify-local-env.mjs",
     "bootstrap:supabase": "node scripts/bootstrap-supabase.mjs",
