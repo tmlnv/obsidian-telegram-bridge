@@ -329,7 +329,7 @@ obsidian-telegram/
 ├── manifest.json            Obsidian plugin manifest (release source of truth)
 ├── versions.json            Plugin → min Obsidian app version map
 ├── plugin/                  Obsidian plugin (TypeScript + esbuild)
-│   ├── manifest.json        Local-dev mirror of the root manifest
+│   ├── manifest.json        Copied from root manifest by esbuild (gitignored)
 │   ├── styles.css           Plugin styles
 │   └── src/
 │       ├── main.ts          Plugin entry point

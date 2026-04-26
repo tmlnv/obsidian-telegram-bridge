@@ -1,5 +1,6 @@
 import esbuild from "esbuild";
 import process from "process";
+import { copyFileSync } from "node:fs";
 import builtins from "builtin-modules";
 
 const banner = `/*
@@ -9,6 +10,19 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const isProduction = process.argv[2] === "production";
+
+const filesToMirror = ["manifest.json", "versions.json"];
+
+const mirrorRootFilesPlugin = {
+  name: "mirror-root-files",
+  setup(build) {
+    build.onEnd(() => {
+      for (const file of filesToMirror) {
+        copyFileSync(`../${file}`, file);
+      }
+    });
+  },
+};
 
 const context = await esbuild.context({
   banner: { js: banner },
@@ -36,6 +50,7 @@ const context = await esbuild.context({
   sourcemap: isProduction ? false : "inline",
   treeShaking: true,
   outfile: "main.js",
+  plugins: [mirrorRootFilesPlugin],
 });
 
 if (isProduction) {
