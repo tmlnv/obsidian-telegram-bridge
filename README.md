@@ -59,8 +59,8 @@ Save the output — you will need it in the next step.
 
 In the Supabase dashboard → **Edge Functions → Manage secrets**, add:
 
-| Secret name | Value |
-|---|---|
+| Secret name                | Value                             |
+| -------------------------- | --------------------------------- |
 | `BOT_TOKEN_ENCRYPTION_KEY` | The base64 key you just generated |
 
 The Supabase built-in secrets (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) are injected automatically — you do not need to add them.
@@ -71,7 +71,7 @@ Clone this repository and link it to your Supabase project:
 
 ```bash
 git clone <repo-url>
-cd obsidian-telegram
+cd obsidian-telegram-bridge
 npm install
 
 supabase login
@@ -86,6 +86,7 @@ This applies all migrations and creates the required tables, functions, indexes,
 Some migrations use `pg_cron` and `pg_net`. Enable them in the Supabase dashboard:
 
 **Database → Extensions** → search for and enable:
+
 - `pg_net`
 - `pg_cron`
 
@@ -138,17 +139,21 @@ By default, bots only see messages that mention them. To let the bot see all mes
 Until this plugin is published to the Obsidian community registry, install it manually:
 
 1. Build the plugin:
+
    ```bash
    npm install --prefix plugin
    npm run build:plugin
    ```
+
 2. Copy the output files into your vault's plugin folder:
+
    ```
    <vault>/.obsidian/plugins/telegram-bridge/
    ├── main.js         (from plugin/main.js)
    ├── manifest.json   (from repo root)
    └── styles.css      (from plugin/styles.css)
    ```
+
 3. In Obsidian → **Settings → Community plugins**, enable **Telegram Bridge**.
 
 ### 3.2 Connect to Supabase
@@ -209,20 +214,20 @@ Telegram/files/{{chat}}/{{file:name}}.{{file:extension}}
 
 ### Template variables
 
-| Variable | Description |
-|---|---|
-| `{{chat}}` | Chat title or numeric chat ID |
-| `{{chatId}}` | Numeric chat ID |
-| `{{topic}}` | `topic-name/` for forum topics, empty otherwise |
-| `{{topicId}}` | Numeric topic ID or empty |
-| `{{user}}` | `@username` or full name of the sender |
-| `{{messageId}}` | Telegram message ID |
-| `{{messageType}}` | `text`, `photo`, `document`, `video`, `audio`, `voice`, `caption`, `service` |
-| `{{content}}` | Full message text or caption |
-| `{{content:N}}` | First N characters of content |
-| `{{messageDate:FORMAT}}` | Message timestamp — use `YYYY`, `MM`, `DD`, `HH`, `mm`, `ss` |
-| `{{file:name}}` | File name without extension |
-| `{{file:extension}}` | File extension |
+| Variable                 | Description                                                                  |
+| ------------------------ | ---------------------------------------------------------------------------- |
+| `{{chat}}`               | Chat title or numeric chat ID                                                |
+| `{{chatId}}`             | Numeric chat ID                                                              |
+| `{{topic}}`              | `topic-name/` for forum topics, empty otherwise                              |
+| `{{topicId}}`            | Numeric topic ID or empty                                                    |
+| `{{user}}`               | `@username` or full name of the sender                                       |
+| `{{messageId}}`          | Telegram message ID                                                          |
+| `{{messageType}}`        | `text`, `photo`, `document`, `video`, `audio`, `voice`, `caption`, `service` |
+| `{{content}}`            | Full message text or caption                                                 |
+| `{{content:N}}`          | First N characters of content                                                |
+| `{{messageDate:FORMAT}}` | Message timestamp — use `YYYY`, `MM`, `DD`, `HH`, `mm`, `ss`                 |
+| `{{file:name}}`          | File name without extension                                                  |
+| `{{file:extension}}`     | File extension                                                               |
 
 ---
 
@@ -234,15 +239,15 @@ Rules are checked top to bottom. The **first matching rule** wins. If no rule ma
 
 ### Filter query syntax
 
-| Syntax | Meaning |
-|---|---|
-| `{{all}}` | Match every message |
-| `{{chat=Name}}` | Chat title or ID equals "Name" (case-insensitive) |
-| `{{chat!=Name}}` | Chat title or ID does not equal "Name" |
-| `{{chat~word}}` | Chat title contains "word" |
-| `{{topic=General}}` | Topic name or ID equals "General" |
-| `{{user=alice}}` | Sender username or name equals "alice" |
-| `{{content~todo}}` | Message text contains "todo" |
+| Syntax              | Meaning                                           |
+| ------------------- | ------------------------------------------------- |
+| `{{all}}`           | Match every message                               |
+| `{{chat=Name}}`     | Chat title or ID equals "Name" (case-insensitive) |
+| `{{chat!=Name}}`    | Chat title or ID does not equal "Name"            |
+| `{{chat~word}}`     | Chat title contains "word"                        |
+| `{{topic=General}}` | Topic name or ID equals "General"                 |
+| `{{user=alice}}`    | Sender username or name equals "alice"            |
+| `{{content~todo}}`  | Message text contains "todo"                      |
 
 Combine multiple conditions in one filter query — all must match (AND logic):
 
@@ -269,9 +274,9 @@ Rule 3:  {{all}}
 
 ### Polling vs Realtime
 
-| Setting | Behaviour |
-|---|---|
-| **Poll interval** | Plugin checks for new messages every N seconds (default: 30) |
+| Setting              | Behaviour                                                    |
+| -------------------- | ------------------------------------------------------------ |
+| **Poll interval**    | Plugin checks for new messages every N seconds (default: 30) |
 | **Realtime enabled** | Supabase Realtime triggers an immediate poll on new messages |
 
 Realtime gives near-instant delivery but uses a persistent WebSocket connection. Keep it off if you want lower resource usage.
@@ -280,11 +285,11 @@ Realtime gives near-instant delivery but uses a persistent WebSocket connection.
 
 The plugin estimates your Supabase usage (database rows + file storage) and can send you a Telegram message when you approach a configured limit.
 
-| Setting | Description |
-|---|---|
-| **Storage limit (MB)** | Soft limit used for the estimate (default: 1024 MB) |
+| Setting                   | Description                                            |
+| ------------------------- | ------------------------------------------------------ |
+| **Storage limit (MB)**    | Soft limit used for the estimate (default: 1024 MB)    |
 | **Warning threshold (%)** | Warn when usage exceeds this percentage (default: 80%) |
-| **Telegram warnings** | Send the warning via your connected bot |
+| **Telegram warnings**     | Send the warning via your connected bot                |
 
 The warning is sent at most once per threshold crossing and resets automatically when usage drops below the threshold.
 
