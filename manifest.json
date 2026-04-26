@@ -3,7 +3,7 @@
   "name": "Telegram Bridge",
   "version": "0.1.0",
   "minAppVersion": "1.5.0",
-  "description": "Sync messages from a Telegram bot into your vault through a self-hosted Supabase backend.",
+  "description": "Sync messages from Telegram into your vault through a self-hosted Supabase backend.",
   "author": "tmlnv",
   "authorUrl": "https://github.com/tmlnv/obsidian-telegram-bridge",
   "isDesktopOnly": false
