@@ -3,10 +3,7 @@ dist/
 .DS_Store
 .env
 .env.*
-plugin/main.js
-plugin/manifest.json
-plugin/versions.json
-plugin/node_modules/
-plugin/coverage/
+main.js
+coverage/
 supabase/.temp/
 testing/

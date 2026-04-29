@@ -1,4 +1,4 @@
-import { Notice, Platform, Plugin } from "obsidian";
+import { Notice, Platform, Plugin, requestUrl } from "obsidian";
 import {
   createDefaultDistributionRule,
   DEFAULT_SETTINGS,
@@ -234,7 +234,8 @@ export default class ObsidianTelegramPlugin extends Plugin {
       throw new Error("Sign in before setting up the Telegram bot.");
     }
 
-    const response = await fetch(`${this.settings.supabase_url}/functions/v1/setup-bot`, {
+    const response = await requestUrl({
+      url: `${this.settings.supabase_url}/functions/v1/setup-bot`,
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -242,13 +243,17 @@ export default class ObsidianTelegramPlugin extends Plugin {
         apikey: this.settings.supabase_anon_key,
       },
       body: JSON.stringify({ bot_token: botToken }),
+      throw: false,
     });
 
-    const payload = (await response.json().catch(() => null)) as
-      | { error?: string; bot_username?: string; webhook_url?: string }
-      | null;
+    let payload: { error?: string; bot_username?: string; webhook_url?: string } | null = null;
+    try {
+      payload = response.json as { error?: string; bot_username?: string; webhook_url?: string };
+    } catch {
+      payload = null;
+    }
 
-    if (!response.ok) {
+    if (response.status < 200 || response.status >= 300) {
       throw new Error(payload?.error ?? `Bot setup failed with status ${response.status}.`);
     }
 

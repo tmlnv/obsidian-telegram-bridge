@@ -1,16 +1,28 @@
 {
   "name": "telegram-bridge",
   "version": "0.1.0",
-  "private": true,
-  "description": "Monorepo for the Telegram Bridge Obsidian plugin and Supabase backend",
+  "description": "Sync messages from Telegram into your vault through a self-hosted Supabase backend.",
+  "main": "main.js",
   "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "verify": "node scripts/verify-local-env.mjs",
-    "bootstrap:supabase": "node scripts/bootstrap-supabase.mjs",
-    "build:plugin": "npm run build --prefix plugin",
-    "dev:plugin": "npm run dev --prefix plugin",
-    "test:plugin": "npm run test --prefix plugin"
+    "bootstrap:supabase": "node scripts/bootstrap-supabase.mjs"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.30",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.25.1",
+    "obsidian": "latest",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.8"
   }
 }

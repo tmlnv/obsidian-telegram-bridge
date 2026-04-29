@@ -141,17 +141,17 @@ Until this plugin is published to the Obsidian community registry, install it ma
 1. Build the plugin:
 
    ```bash
-   npm install --prefix plugin
-   npm run build:plugin
+   npm install
+   npm run build
    ```
 
 2. Copy the output files into your vault's plugin folder:
 
    ```
    <vault>/.obsidian/plugins/telegram-bridge/
-   ├── main.js         (from plugin/main.js)
-   ├── manifest.json   (from repo root)
-   └── styles.css      (from plugin/styles.css)
+   ├── main.js
+   ├── manifest.json
+   └── styles.css
    ```
 
 3. In Obsidian → **Settings → Community plugins**, enable **Telegram Bridge**.
@@ -325,21 +325,22 @@ The Telegram Bot API limits file downloads to **20 MB**. Anything larger cannot 
 ## Repository layout
 
 ```
-obsidian-telegram/
-├── manifest.json            Obsidian plugin manifest (release source of truth)
+obsidian-telegram-bridge/
+├── manifest.json            Obsidian plugin manifest
 ├── versions.json            Plugin → min Obsidian app version map
-├── plugin/                  Obsidian plugin (TypeScript + esbuild)
-│   ├── manifest.json        Copied from root manifest by esbuild (gitignored)
-│   ├── styles.css           Plugin styles
-│   └── src/
-│       ├── main.ts          Plugin entry point
-│       ├── sync-engine.ts   Polling, cursor management, Realtime
-│       ├── vault-writer.ts  File creation and editing in the vault
-│       ├── message-renderer.ts  Markdown rendering with block markers
-│       ├── template-engine.ts   Template variable expansion
-│       ├── distribution-rules.ts  Filter query evaluation
-│       ├── settings-tab.ts  Settings UI
-│       └── types.ts         Shared TypeScript types
+├── styles.css               Plugin styles
+├── esbuild.config.mjs       Build config
+├── tsconfig.json            TypeScript config
+├── src/
+│   ├── main.ts              Plugin entry point
+│   ├── sync-engine.ts       Polling, cursor management, Realtime
+│   ├── vault-writer.ts      File creation and editing in the vault
+│   ├── message-renderer.ts  Markdown rendering with block markers
+│   ├── template-engine.ts   Template variable expansion
+│   ├── distribution-rules.ts  Filter query evaluation
+│   ├── settings-tab.ts      Settings UI
+│   └── types.ts             Shared TypeScript types
+├── test/                    Vitest unit tests
 ├── supabase/
 │   ├── config.toml          Local dev config
 │   ├── functions/

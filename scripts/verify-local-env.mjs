@@ -5,8 +5,8 @@ import { constants } from "node:fs";
 import { spawnSync } from "node:child_process";
 
 const requiredFiles = [
-  "plugin/manifest.json",
-  "plugin/package.json",
+  "manifest.json",
+  "package.json",
   "supabase/config.toml",
   "supabase/migrations/202603030001_initial_schema.sql",
 ];

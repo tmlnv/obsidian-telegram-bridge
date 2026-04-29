@@ -20,15 +20,12 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: plugin/package-lock.json
 
-      - name: Install plugin dependencies
+      - name: Install dependencies
         run: npm ci
-        working-directory: plugin
 
       - name: Build plugin
         run: npm run build
-        working-directory: plugin
 
       - name: Verify manifest version matches tag
         run: |
@@ -43,8 +40,8 @@ jobs:
         run: |
           mkdir -p release
           cp manifest.json release/manifest.json
-          cp plugin/main.js release/main.js
-          cp plugin/styles.css release/styles.css
+          cp main.js release/main.js
+          cp styles.css release/styles.css
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2

@@ -51,8 +51,8 @@ function main() {
   console.log("supabase secrets set SUPABASE_ANON_KEY=<value> SUPABASE_SERVICE_ROLE_KEY=<value>");
   console.log("");
   console.log("After deployment:");
-  console.log("1. Install plugin dependencies with: npm install --prefix plugin");
-  console.log("2. Build the plugin with: npm run build:plugin");
+  console.log("1. Install plugin dependencies with: npm install");
+  console.log("2. Build the plugin with: npm run build");
   console.log("3. Open Obsidian and complete bot setup in the plugin settings.");
 }
 
