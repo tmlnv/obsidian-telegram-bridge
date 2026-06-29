@@ -104,10 +104,10 @@ export function expandTemplate(
   const content = getContent(message);
   let result = template;
 
-  result = result.replace(/\{\{messageDate:([^}]+)\}\}/g, (_match, format) =>
+  result = result.replace(/\{\{messageDate:([^}]+)\}\}/g, (_match: string, format: string) =>
     safe(formatDate(message.telegram_date, format)),
   );
-  result = result.replace(/\{\{content(?::(\d+))?\}\}/g, (_match, length) =>
+  result = result.replace(/\{\{content(?::(\d+))?\}\}/g, (_match: string, length?: string) =>
     safe(sliceContent(content, length)),
   );
   result = result.replace(/\{\{chatId\}\}/g, safe(String(message.telegram_chat_id)));

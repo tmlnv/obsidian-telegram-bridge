@@ -267,10 +267,10 @@
   border-top: 0;
 }
 
-.obsidian-telegram-section-note {
-  border-top: 0 !important;
-  padding-top: 4px !important;
-  padding-bottom: 4px !important;
+.obsidian-telegram-section-body .obsidian-telegram-section-note {
+  border-top: 0;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 
 .obsidian-telegram-section-note .setting-item-control {
