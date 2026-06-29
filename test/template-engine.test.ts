@@ -61,4 +61,28 @@ describe("expandTemplate", () => {
   it("supports content slicing", () => {
     expect(expandTemplate("{{content:5}}", createMessage())).toBe("hello");
   });
+
+  it("strips path separators from variable values in path mode", () => {
+    expect(
+      expandTemplate(
+        "Telegram/{{chat}}/{{content:30}}.md",
+        createMessage({
+          telegram_chat_title: "Saved",
+          topic_id: null,
+          topic_name: null,
+          text_content: "https://radio.garden/something",
+        }),
+        { isPath: true },
+      ),
+    ).toBe("Telegram/Saved/https___radio.garden_something.md");
+  });
+
+  it("preserves path separators in non-path mode", () => {
+    expect(
+      expandTemplate(
+        "see {{content}}",
+        createMessage({ text_content: "https://radio.garden/x" }),
+      ),
+    ).toBe("see https://radio.garden/x");
+  });
 });

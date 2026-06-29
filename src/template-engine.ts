@@ -4,11 +4,10 @@ interface ExpandOptions {
   isPath?: boolean;
 }
 
-function sanitizePath(value: string): string {
-  return value
-    .replace(/[\\:*?"<>|\n\r]/g, "_")
-    .replace(/\/+/g, "/")
-    .replace(/(^\/|\/$)/g, "");
+const PATH_UNSAFE_CHARS = /[\\/:*?"<>|\n\r]/g;
+
+function sanitizeForPath(value: string): string {
+  return value.replace(PATH_UNSAFE_CHARS, "_");
 }
 
 function normalizeTemplatePath(value: string): string {
@@ -53,8 +52,12 @@ function getChatLabel(message: MessageRow): string {
   return message.telegram_chat_title ?? String(message.telegram_chat_id);
 }
 
-function getTopicLabel(message: MessageRow): string {
-  return message.topic_name ? `${message.topic_name}/` : "";
+function getTopicLabel(message: MessageRow, isPath: boolean): string {
+  if (!message.topic_name) {
+    return "";
+  }
+  const name = isPath ? sanitizeForPath(message.topic_name) : message.topic_name;
+  return `${name}/`;
 }
 
 function getUserLabel(message: MessageRow): string {
@@ -95,27 +98,30 @@ export function expandTemplate(
   message: MessageRow,
   options: ExpandOptions = {},
 ): string {
+  const isPath = options.isPath ?? false;
+  const safe = (value: string): string => (isPath ? sanitizeForPath(value) : value);
+
   const content = getContent(message);
   let result = template;
 
   result = result.replace(/\{\{messageDate:([^}]+)\}\}/g, (_match, format) =>
-    formatDate(message.telegram_date, format),
+    safe(formatDate(message.telegram_date, format)),
   );
   result = result.replace(/\{\{content(?::(\d+))?\}\}/g, (_match, length) =>
-    sliceContent(content, length),
+    safe(sliceContent(content, length)),
   );
-  result = result.replace(/\{\{chatId\}\}/g, String(message.telegram_chat_id));
-  result = result.replace(/\{\{chat\}\}/g, getChatLabel(message));
-  result = result.replace(/\{\{topicId\}\}/g, message.topic_id ? String(message.topic_id) : "");
-  result = result.replace(/\{\{topic\}\}/g, getTopicLabel(message));
-  result = result.replace(/\{\{user\}\}/g, getUserLabel(message));
-  result = result.replace(/\{\{messageId\}\}/g, String(message.telegram_message_id));
-  result = result.replace(/\{\{messageType\}\}/g, message.message_type);
-  result = result.replace(/\{\{file:name\}\}/g, getFileBaseName(message));
-  result = result.replace(/\{\{file:extension\}\}/g, getFileExtension(message));
+  result = result.replace(/\{\{chatId\}\}/g, safe(String(message.telegram_chat_id)));
+  result = result.replace(/\{\{chat\}\}/g, safe(getChatLabel(message)));
+  result = result.replace(/\{\{topicId\}\}/g, message.topic_id ? safe(String(message.topic_id)) : "");
+  result = result.replace(/\{\{topic\}\}/g, getTopicLabel(message, isPath));
+  result = result.replace(/\{\{user\}\}/g, safe(getUserLabel(message)));
+  result = result.replace(/\{\{messageId\}\}/g, safe(String(message.telegram_message_id)));
+  result = result.replace(/\{\{messageType\}\}/g, safe(message.message_type));
+  result = result.replace(/\{\{file:name\}\}/g, safe(getFileBaseName(message)));
+  result = result.replace(/\{\{file:extension\}\}/g, safe(getFileExtension(message)));
 
-  if (options.isPath) {
-    return normalizeTemplatePath(sanitizePath(result));
+  if (isPath) {
+    return normalizeTemplatePath(result);
   }
 
   return result;
