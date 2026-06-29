@@ -29,8 +29,8 @@ import { findMatchingRule } from "./distribution-rules";
 import { expandTemplate } from "./template-engine";
 
 function createClientId(): string {
-  if (globalThis.crypto?.randomUUID) {
-    return globalThis.crypto.randomUUID();
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
   }
 
   return `client-${Date.now()}`;
@@ -114,7 +114,7 @@ export default class ObsidianTelegramPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    const loaded = await this.loadData();
+    const loaded = (await this.loadData()) as Partial<PluginSettings> | null;
     this.settings = {
       ...DEFAULT_SETTINGS,
       ...loaded,
@@ -294,13 +294,13 @@ export default class ObsidianTelegramPlugin extends Plugin {
       return null;
     }
 
-    const { data, error } = await getClient().rpc("get_usage_estimate");
-    if (error) {
-      throw new Error(`Failed to load usage estimate: ${error.message}`);
+    const response = await getClient().rpc("get_usage_estimate");
+    if (response.error) {
+      throw new Error(`Failed to load usage estimate: ${response.error.message}`);
     }
 
-    const row = Array.isArray(data) ? data[0] : data;
-    this.latestUsageEstimate = (row ?? null) as UsageEstimateRow | null;
+    const rows = (response.data ?? []) as UsageEstimateRow[];
+    this.latestUsageEstimate = rows[0] ?? null;
     this.updateStatusIndicator();
     return this.latestUsageEstimate;
   }
@@ -311,21 +311,22 @@ export default class ObsidianTelegramPlugin extends Plugin {
       return null;
     }
 
-    const { data, error } = await getClient()
+    const response = await getClient()
       .from("user_preferences")
       .select("*")
       .eq("user_id", getSession()!.user.id)
       .maybeSingle();
 
-    if (error) {
-      throw new Error(`Failed to load usage settings: ${error.message}`);
+    if (response.error) {
+      throw new Error(`Failed to load usage settings: ${response.error.message}`);
     }
 
-    if (!data) {
+    const preferences = response.data as UserPreferencesRow | null;
+    if (!preferences) {
       return await this.pushUserPreferencesToServer();
     }
 
-    this.latestUserPreferences = data as UserPreferencesRow;
+    this.latestUserPreferences = preferences;
     this.settings.estimated_storage_limit_mb = Math.max(
       1,
       Math.round(this.latestUserPreferences.estimated_storage_limit_bytes / (1024 * 1024)),
@@ -353,17 +354,17 @@ export default class ObsidianTelegramPlugin extends Plugin {
       updated_at: new Date().toISOString(),
     };
 
-    const { data, error } = await getClient()
+    const response = await getClient()
       .from("user_preferences")
       .upsert(payload)
       .select("*")
       .single();
 
-    if (error) {
-      throw new Error(`Failed to save usage settings: ${error.message}`);
+    if (response.error) {
+      throw new Error(`Failed to save usage settings: ${response.error.message}`);
     }
 
-    this.latestUserPreferences = data as UserPreferencesRow;
+    this.latestUserPreferences = response.data as UserPreferencesRow;
     this.settings.estimated_storage_limit_mb = Math.max(
       1,
       Math.round(this.latestUserPreferences.estimated_storage_limit_bytes / (1024 * 1024)),

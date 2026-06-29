@@ -34,11 +34,11 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
     }
 
     const intro = containerEl.createDiv({ cls: "obsidian-telegram-intro" });
-    intro.createEl("div", {
+    intro.createDiv({
       cls: "obsidian-telegram-intro-title",
       text: "Requires a self-hosted Supabase project",
     });
-    intro.createEl("div", {
+    intro.createDiv({
       cls: "obsidian-telegram-intro-body",
       text: "This plugin reads Telegram messages from your own Supabase backend. Follow the README to provision a free Supabase project, deploy the edge functions, and create a Telegram bot before connecting below.",
     });
@@ -58,7 +58,7 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
     const summary = details.createEl("summary", {
       cls: "obsidian-telegram-section-summary",
     });
-    summary.createEl("span", {
+    summary.createSpan({
       cls: "obsidian-telegram-section-title",
       text: title,
     });
@@ -585,11 +585,11 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
     description: string,
   ): void {
     const row = containerEl.createDiv({ cls: "obsidian-telegram-connection-row" });
-    row.createEl("div", { cls: "obsidian-telegram-connection-label", text: label });
+    row.createDiv({ cls: "obsidian-telegram-connection-label", text: label });
 
     const body = row.createDiv({ cls: "obsidian-telegram-connection-body" });
-    body.createEl("div", { cls: "obsidian-telegram-connection-value", text: value });
-    body.createEl("div", { cls: "obsidian-telegram-connection-description", text: description });
+    body.createDiv({ cls: "obsidian-telegram-connection-value", text: value });
+    body.createDiv({ cls: "obsidian-telegram-connection-description", text: description });
   }
 
   private usageSummaryEl: HTMLElement | null = null;
@@ -618,16 +618,16 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
 
     const headerEl = summaryEl.createDiv({ cls: "obsidian-telegram-usage-header" });
     const headerCopyEl = headerEl.createDiv();
-    headerCopyEl.createEl("div", { cls: "obsidian-telegram-usage-eyebrow", text: "Estimated usage" });
-    headerCopyEl.createEl("div", {
+    headerCopyEl.createDiv({ cls: "obsidian-telegram-usage-eyebrow", text: "Estimated usage" });
+    headerCopyEl.createDiv({
       cls: "obsidian-telegram-usage-title obsidian-telegram-skeleton-text",
       text: "—",
     });
-    headerCopyEl.createEl("div", {
+    headerCopyEl.createDiv({
       cls: "obsidian-telegram-usage-subtitle obsidian-telegram-skeleton-text",
       text: "Loading estimated storage usage…",
     });
-    headerEl.createEl("div", {
+    headerEl.createDiv({
       cls: "obsidian-telegram-usage-badge obsidian-telegram-skeleton-badge",
       text: "—",
     });
@@ -650,11 +650,11 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
     this.createUsageStat(statsEl, "Files", "—", "— of estimate");
 
     const footerEl = summaryEl.createDiv({ cls: "obsidian-telegram-usage-footer" });
-    footerEl.createEl("div", {
+    footerEl.createDiv({
       cls: "obsidian-telegram-usage-note obsidian-telegram-skeleton-text",
       text: "Fetching notification status…",
     });
-    footerEl.createEl("div", {
+    footerEl.createDiv({
       cls: "obsidian-telegram-usage-note obsidian-telegram-skeleton-text",
       text: "Fetching warning state…",
     });
@@ -696,22 +696,22 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
 
     const headerEl = summaryEl.createDiv({ cls: "obsidian-telegram-usage-header" });
     const headerCopyEl = headerEl.createDiv();
-    headerCopyEl.createEl("div", { cls: "obsidian-telegram-usage-eyebrow", text: "Estimated usage" });
-    headerCopyEl.createEl("div", {
+    headerCopyEl.createDiv({ cls: "obsidian-telegram-usage-eyebrow", text: "Estimated usage" });
+    headerCopyEl.createDiv({
       cls: "obsidian-telegram-usage-title",
       text:
         usage === null
           ? "No synced data yet"
           : `${this.formatBytes(usageBytes)} of ${this.formatBytes(limitBytes)}`,
     });
-    headerCopyEl.createEl("div", {
+    headerCopyEl.createDiv({
       cls: "obsidian-telegram-usage-subtitle",
       text:
         usage === null
           ? "The chart will appear after your first synced messages."
           : `${usage.message_count} messages and ${usage.file_count} files tracked by the estimate.`,
     });
-    headerEl.createEl("div", {
+    headerEl.createDiv({
       cls: "obsidian-telegram-usage-badge",
       text: `${usagePercent}%`,
     });
@@ -752,11 +752,11 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
     );
 
     const footerEl = summaryEl.createDiv({ cls: "obsidian-telegram-usage-footer" });
-    footerEl.createEl("div", {
+    footerEl.createDiv({
       cls: "obsidian-telegram-usage-note",
       text: notificationStatus,
     });
-    footerEl.createEl("div", {
+    footerEl.createDiv({
       cls: "obsidian-telegram-usage-note",
       text: preferences?.telegram_warnings_enabled
         ? "Telegram warnings are enabled."
@@ -766,10 +766,10 @@ export class ObsidianTelegramSettingTab extends PluginSettingTab {
 
   private createUsageStat(containerEl: HTMLElement, label: string, value: string, meta?: string): void {
     const statEl = containerEl.createDiv({ cls: "obsidian-telegram-usage-stat" });
-    statEl.createEl("div", { cls: "obsidian-telegram-usage-stat-label", text: label });
-    statEl.createEl("div", { cls: "obsidian-telegram-usage-stat-value", text: value });
+    statEl.createDiv({ cls: "obsidian-telegram-usage-stat-label", text: label });
+    statEl.createDiv({ cls: "obsidian-telegram-usage-stat-value", text: value });
     if (meta) {
-      statEl.createEl("div", { cls: "obsidian-telegram-usage-stat-meta", text: meta });
+      statEl.createDiv({ cls: "obsidian-telegram-usage-stat-meta", text: meta });
     }
   }
 

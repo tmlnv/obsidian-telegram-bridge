@@ -1,13 +1,12 @@
 {
   "compilerOptions": {
     "outDir": "./dist",
-    "baseUrl": ".",
     "allowSyntheticDefaultImports": true,
     "inlineSourceMap": true,
     "inlineSources": true,
     "module": "ESNext",
     "target": "ES2020",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "strict": true,
     "isolatedModules": true,
     "lib": ["DOM", "ES2020"],

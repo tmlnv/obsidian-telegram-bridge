@@ -107,18 +107,18 @@ export class SyncEngine {
       throw new Error("Cannot start sync without an authenticated session.");
     }
 
-    const { data, error } = await getClient()
+    const response = await getClient()
       .from("sync_clients")
       .select("*")
       .eq("id", this.clientId)
       .maybeSingle();
 
-    if (error) {
-      throw new Error(`Failed to load sync client: ${error.message}`);
+    if (response.error) {
+      throw new Error(`Failed to load sync client: ${response.error.message}`);
     }
 
-    if (data) {
-      const row = data as SyncClientRow;
+    const row = response.data as SyncClientRow | null;
+    if (row) {
       this.cursor = {
         last_processed_message_updated_at: row.last_processed_message_updated_at,
         last_processed_message_id: row.last_processed_message_id,
@@ -177,17 +177,17 @@ export class SyncEngine {
   }
 
   private async fetchMessagesAfterCursor(): Promise<MessageRow[]> {
-    const { data, error } = await getClient().rpc("fetch_messages_after_cursor", {
+    const response = await getClient().rpc("fetch_messages_after_cursor", {
       p_last_processed_message_updated_at: this.cursor.last_processed_message_updated_at,
       p_last_processed_message_id: this.cursor.last_processed_message_id,
       p_limit: 50,
     });
 
-    if (error) {
-      throw new Error(`Failed to fetch messages: ${error.message}`);
+    if (response.error) {
+      throw new Error(`Failed to fetch messages: ${response.error.message}`);
     }
 
-    return (data ?? []) as MessageRow[];
+    return (response.data ?? []) as MessageRow[];
   }
 
   private subscribeRealtime(): void {
